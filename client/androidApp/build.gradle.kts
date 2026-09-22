@@ -42,4 +42,8 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
+    // suspendCancellableCoroutine, bridging the SAF picker's callback-based
+    // ActivityResultLauncher API into the suspend PickedFile picker functions
+    // app.inkstave.shared.ui.App expects -- see DocumentPicker.kt.
+    implementation(libs.kotlinx.coroutines.core)
 }

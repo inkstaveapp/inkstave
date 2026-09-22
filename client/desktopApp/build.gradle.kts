@@ -14,6 +14,9 @@ ktlint {
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
+    // withContext(Dispatchers.IO), wrapping the blocking JFileChooser call --
+    // see DesktopFilePicker.kt.
+    implementation(libs.kotlinx.coroutines.core)
 }
 
 compose.desktop {

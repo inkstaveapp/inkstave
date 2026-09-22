@@ -19,6 +19,11 @@ captures/
 .mypy_cache/
 .ruff_cache/
 
+# Local sample/test data — real scores for manual dev testing, never
+# committed (unlike format/fixtures/, which holds synthetic, license-clean
+# fixtures used by automated tests)
+/samples/
+
 # General
 .DS_Store
 Thumbs.db

@@ -55,13 +55,39 @@ assumed.
 
 ## M1 — Single-device viewer (Android + Linux)
 
-- [ ] Import a score from a single PDF.
-- [ ] Import a score from a set of images.
-- [ ] Render pages, swipe/tap/keyboard page turning.
-- [ ] Basic library screen (list of imported scores with title/composer),
+- [x] Import a score from a single PDF. Desktop renders via Apache PDFBox
+      (`NOTICE.md`); Android via the platform's built-in
+      `android.graphics.pdf.PdfRenderer` (no dependency).
+- [x] Import a score from a set of images (PNG/JPEG at minimum), re-encoded
+      to PNG at import time regardless of source format.
+- [x] Render pages, swipe/tap/keyboard page turning. Swipe via
+      `HorizontalPager`; tap zones on the left/right thirds; desktop arrow
+      keys (`Key.DirectionLeft`/`Right`) -- a no-op on Android, as intended,
+      since nothing there dispatches a key event.
+- [x] Basic library screen (list of imported scores with title/composer),
       backed by the local index database, not by scanning `.smpk` files on
       every load (`docs/performance.md`, ADR-0005).
-- [ ] `.smpk` read/write for this minimal case (no annotations yet).
+- [x] `.smpk` read/write for this minimal case (no annotations yet):
+      `SmpkWriter`/`SmpkReader` (`client/shared/.../format/SmpkContainer.kt`),
+      backed by `java.util.zip`, with `Part`/`PageMeta` Kotlin models added
+      alongside M0's `Manifest`. Pages are `.png`, not the originally
+      -specified `.webp` -- see the note in `docs/format-spec.md`'s
+      container listing (no cross-platform WebP codec dependency existed
+      yet; revisit once one is actually needed).
+- **Verified green:** `:shared:test`, `:shared:desktopTest` (25 tests,
+  covering `Part`/`PageMeta` round-trip, the `.smpk` container round-trip,
+  `ImportPipeline`, and the real-PDFBox-backed `renderPdfPages`/
+  `decodeImagePage` tests), `ktlintCheck`, `:desktopApp:build`, and
+  `:androidApp:assembleDebug` (real APK produced) all pass from a clean
+  build.
+- **Known gap, disclosed rather than silently skipped:** no true UI-level
+  end-to-end automation (Android instrumented tests, desktop UI-driver
+  automation) exists yet. `docs/testing-strategy.md`'s headline M1 scenario
+  ("import a PDF, see it in the library, open it, turn pages") is instead
+  covered by a headless integration test
+  (`LibraryImporterEndToEndTest.kt`) driving the real import → index →
+  `SmpkReader` code path without going through actual UI widgets. Worth
+  building real UI-level automation before M2 adds more screens to cover.
 
 ## M2 — Annotation engine
 

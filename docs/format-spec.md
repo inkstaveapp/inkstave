@@ -30,13 +30,17 @@ score.smpk
 │   │   └── part.json
 │   └── ...
 ├── pages/
-│   ├── <page-id>.webp            # cleaned, display-ready raster
+│   ├── <page-id>.png              # cleaned, display-ready raster (PNG as of M1: lossless,
+│   │                              # native on both JVM/ImageIO and Android with zero new
+│   │                              # codec dependency; WebP is a plausible later swap purely
+│   │                              # for size once there's already a reason to add a
+│   │                              # cross-platform WebP codec dependency)
 │   ├── <page-id>.raw.jpg         # optional: original capture, kept for reprocessing
 │   └── <page-id>.meta.json       # per-page processing/OCR metadata
 ├── annotations/
 │   └── <page-id>.json            # vector annotation layer for that page
 └── thumbnails/                    # optional, regenerable cache — excluded from sync payloads
-    └── <page-id>.webp
+    └── <page-id>.png
 ```
 
 ## `manifest.json`

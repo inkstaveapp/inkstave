@@ -39,6 +39,8 @@ before any release (`ROADMAP.md` M7), not something done by hand here.
 | AndroidX core-ktx | 1.16.0 | Apache-2.0 | |
 | SQLDelight (app.cash.sqldelight) | 2.3.2 | Apache-2.0 | Local library index, ADR-0005. |
 | ktlint-gradle (org.jlleitschuh.gradle.ktlint) | 14.2.0 | MIT | Dev tooling; wraps ktlint (also MIT). |
+| kotlinx-coroutines-core | 1.10.2 | Apache-2.0 | M1: library/viewer screen async import + lazy page loading. |
+| Apache PDFBox (org.apache.pdfbox:pdfbox) | 3.0.7 | Apache-2.0 | M1: desktop-only PDF-to-page rendering (`docs/decisions/0001-client-framework.md`). Android uses the platform's built-in `android.graphics.pdf.PdfRenderer` instead -- no dependency, no license entry needed for that path. |
 
 **Not added: detekt.** Tried at 1.23.8 (current stable); fails to
 configure against AGP 8.11.1/9.x with a `NoClassDefFoundError`. detekt 2.0
