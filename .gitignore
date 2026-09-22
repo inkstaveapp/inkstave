@@ -1,0 +1,36 @@
+# Kotlin / Gradle / Android
+.gradle/
+build/
+*.iml
+.idea/
+*.hprof
+local.properties
+captures/
+.cxx/
+*.apk
+*.aab
+
+# Compose Multiplatform / desktop packaging output
+client/desktopApp/build/
+
+# Python
+processing-service/.venv/
+processing-service/__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# General
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+!.vscode/extensions.json

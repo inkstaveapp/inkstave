@@ -1,0 +1,85 @@
+# Image processing pipeline — draft design
+
+**Status: proposal, not yet implemented.** Runs in `processing-service/`
+(Python, ADR-0002), invoked by the desktop client per captured photo (or per
+imported image) during M4.
+
+## Pipeline stages
+
+Each stage takes and returns an in-memory image plus a small parameter
+record that gets persisted into `pages/<page-id>.meta.json`
+(`docs/format-spec.md`) for reproducibility — a page can be reprocessed from
+its raw capture later if an algorithm improves, without re-capturing.
+
+1. **Page detection & perspective correction**
+   Detect the sheet-music page's quadrilateral boundary against its
+   background (contour detection on edges/color difference) and apply a
+   perspective transform to square it up. Candidate approach: OpenCV
+   `findContours` + `getPerspectiveTransform`.
+
+2. **Dewarping / flattening**
+   Correct for page curl (common when a book/binder won't lie flat) using a
+   mesh-based or cylindrical-surface dewarping model, not just a flat
+   perspective transform. This is the hardest stage; expect iteration.
+   Candidate approaches: document dewarping via detected text/staff-line
+   curvature, or a general document-flattening model from the open-source
+   document-scanning literature. Must remain fully open-source-licensed
+   (see `NOTICE.md`) — no closed-source SDKs.
+
+3. **Cropping**
+   Trim to the corrected page bounds detected in stage 1, removing
+   background/desk/whatever else was in frame.
+
+4. **Contrast / black-and-white cleanup**
+   Adaptive thresholding / CLAHE-style local contrast enhancement to turn an
+   unevenly lit photo into crisp black notation on a clean white background,
+   without blowing out faint pencil annotations the musician may want kept
+   legible. This likely needs a tunable "strength" the user can back off
+   from full binarization to a grayscale cleanup, for scores with pencil
+   markings.
+
+5. **Aspect-ratio / size normalization**
+   Normalize the cropped, cleaned page to a standard aspect ratio class
+   (A4, US Letter, or "custom" when the source clearly isn't either) while
+   preserving all content — pad rather than stretch/distort. Output at a
+   resolution tier suitable for the largest expected display (desktop),
+   with the client responsible for downscaling for smaller screens rather
+   than the pipeline producing multiple fixed sizes.
+
+6. **OCR metadata extraction**
+   Run OCR (Tesseract) over the cleaned page — realistically only useful on
+   the first page(s) of a piece — and apply layout heuristics (title is
+   typically the largest text near the top-center; composer/arranger
+   typically top-right/top-left in smaller text; standard sheet-music
+   layout conventions) to propose `title`/`subtitle`/`composer`/`arranger`/
+   `lyricist` candidates with a confidence score. These are always
+   *proposals* — the client must let the user confirm/edit before they're
+   committed to `manifest.json`, never auto-commit silently.
+
+## Service interface (sketch)
+
+The processing service exposes a local API (loopback-only; never bound to a
+network-reachable interface) that the desktop client calls per photo:
+
+```
+POST /process-page
+  body: raw image bytes + capture context (session id, sequence index)
+  response: { cleanedImage, processingParams, ocrCandidates }
+```
+
+Exact request/response schema lives in `format/` once M0 scaffolds it,
+shared as the contract both the Kotlin client and Python service test
+against.
+
+## Reprocessing
+
+Because `pages/<page-id>.raw.jpg` and the processing parameters are kept
+(`docs/format-spec.md`), "reprocess this page" is a first-class, cheap
+operation — re-run the pipeline (possibly with different manual overrides,
+e.g. the user manually adjusts the detected crop quad) without re-capturing.
+
+## Ownership
+
+Owned by the `image-pipeline` agent (`.claude/agents/image-pipeline.md`) for
+stages 1–5, and jointly with `score-format` for how OCR results
+(stage 6) map onto `manifest.json` fields.
