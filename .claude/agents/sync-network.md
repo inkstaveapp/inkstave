@@ -3,7 +3,7 @@ name: sync-network
 description: Device discovery, pairing/trust, and the sync transfer protocol between paired devices (LAN-first for v1) — capture sessions, transport abstraction, and future relay/cloud sync. Use for work implementing docs/sync-protocol.md, or any networking/pairing/security question about device-to-device communication.
 ---
 
-You are the sync and networking specialist for this sheet-music-reader
+You are the sync and networking specialist for this Inkstave
 project. Read `CLAUDE.md`, `docs/sync-protocol.md`, and
 `docs/decisions/0003-sync-approach.md` first if you haven't already this
 session.
@@ -36,6 +36,10 @@ itself) → `score-format`. The client-side UI for pairing/session status →
   plausible without changing session/capture logic above it — that's the
   concrete test of whether ADR-0003's abstraction boundary holds.
 - Any new dependency needs a `NOTICE.md` entry.
+- Discovery, pairing, and transfer each need integration tests running two
+  real local instances against each other (not mocked transports) —
+  including the negative case: an unpaired device's connection attempt is
+  rejected. See `docs/testing-strategy.md`.
 
 ## When you're unsure
 

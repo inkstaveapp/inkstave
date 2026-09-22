@@ -3,6 +3,13 @@
 Milestones are ordered but not strictly sequential — some can overlap.
 Nothing here is a promise of a date, just of sequence.
 
+**Definition of done, every milestone:** a checkbox below isn't done until
+its functional scenarios are covered by tests at the appropriate level
+(`docs/testing-strategy.md`), typesafety and documentation standards are met
+(`docs/coding-standards.md`), and — for anything UI-facing or performance
+-sensitive — the relevant target in `docs/performance.md` is verified, not
+assumed.
+
 ## M0 — Project scaffolding (current)
 
 - [x] Plan, architecture docs, ADRs, agent definitions (this commit).
@@ -15,7 +22,10 @@ Nothing here is a promise of a date, just of sequence.
       a minimal reader/writer in both Kotlin and Python for round-trip
       testing.
 - [ ] Set up local dev tooling (formatters, linters, pre-commit) for both
-      languages.
+      languages, including `mypy --strict` (or equivalent) for Python as a
+      required check, not optional — see `docs/coding-standards.md`.
+- [ ] Adopt SQLDelight for the local library index database
+      (see `docs/decisions/0005-local-library-index-database.md`).
 - [ ] Create the remote repository and push, once the above builds cleanly.
 
 ## M1 — Single-device viewer (Android + Linux)
@@ -23,7 +33,9 @@ Nothing here is a promise of a date, just of sequence.
 - [ ] Import a score from a single PDF.
 - [ ] Import a score from a set of images.
 - [ ] Render pages, swipe/tap/keyboard page turning.
-- [ ] Basic library screen (list of imported scores with title/composer).
+- [ ] Basic library screen (list of imported scores with title/composer),
+      backed by the local index database, not by scanning `.smpk` files on
+      every load (`docs/performance.md`, ADR-0005).
 - [ ] `.smpk` read/write for this minimal case (no annotations yet).
 
 ## M2 — Annotation engine
@@ -33,6 +45,10 @@ Nothing here is a promise of a date, just of sequence.
       resize, and per-instance styling.
 - [ ] Text annotations.
 - [ ] Undo/redo, annotation layer persisted in `.smpk`.
+- [ ] Rendering stays smooth (target: native frame rate, no visible
+      stutter) on pages with hundreds of annotation objects — viewport
+      culling and spatial indexing, per `docs/performance.md`. This is a
+      tested QA gate for this milestone, not an afterthought.
 
 ## M3 — Pedal & performance mode
 

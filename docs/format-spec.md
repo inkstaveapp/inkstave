@@ -130,6 +130,38 @@ correctly on different device sizes" requirement for annotations
 specifically (page images themselves are normalized per
 `docs/image-pipeline.md`).
 
+One annotation-layer file per page, rather than one file for a whole score,
+is also a deliberate performance choice: it bounds how much annotation data
+must be loaded to interact with the page currently on screen to that one
+page's data, regardless of how many pages or how much annotation history
+the rest of the score carries. See `docs/performance.md` for the full
+rendering-performance design (viewport culling, spatial indexing) this
+enables.
+
+## Local index vs. source of truth
+
+`.smpk` files on disk are the **only** source of truth — for a score's
+content, metadata, and annotations alike. They are what syncs between
+devices (`docs/sync-protocol.md`) and what's portable/backed-up/moved
+around outside the app.
+
+They are not, however, what the library screen queries directly at scale.
+Each device additionally maintains a local SQL database (SQLDelight —
+see [ADR-0005](decisions/0005-local-library-index-database.md)) that mirrors
+`manifest.json` fields for fast list/search/sort/filter. That database is a
+**derived, disposable cache**, never a second source of truth:
+
+- It is rebuilt by rescanning the library's `.smpk` files whenever it's
+  missing or stale — never manually reconciled.
+- It is never synced directly; a device that receives a new/updated `.smpk`
+  via sync re-indexes it locally.
+- Losing it is a "rebuild" event, never a data-loss event. Any format or
+  client change that would make the index un-rebuildable from files alone
+  is a regression of ADR-0005 and needs to be treated as one.
+- It stores only what's queried against (manifest-level fields) — page
+  images, raw captures, and annotation content are never duplicated into
+  it.
+
 ## Versioning & migration policy
 
 - `manifest.json.formatVersion` gates the whole package.
@@ -158,4 +190,5 @@ specifically (page images themselves are normalized per
 This spec is owned by the `score-format` agent
 (`.claude/agents/score-format.md`); the actual JSON Schemas and
 Kotlin/Python reader-writer implementations live in `format/` once M0
-scaffolds them.
+scaffolds them. Both implementations are typed models mirroring these
+schemas, not raw dict/map parsing — see `docs/coding-standards.md`.

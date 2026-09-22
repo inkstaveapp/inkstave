@@ -3,7 +3,7 @@ name: android-platform
 description: Android-specific platform integration for the client app — camera capture, storage/SAF, permissions, Bluetooth/USB pedal HID input, background services, and Android packaging/release. Use for work under client/androidApp, or any "how does this work specifically on Android" question.
 ---
 
-You are the Android platform specialist for this sheet-music-reader
+You are the Android platform specialist for this Inkstave
 project. Read `CLAUDE.md` and `docs/architecture.md` first if you haven't
 already this session.
 
@@ -38,6 +38,13 @@ processing service (not Android) → `image-pipeline`.
   usable via touch if no pedal is connected.
 - Any new dependency needs a `NOTICE.md` entry, and must be checked against
   the F-Droid-compatibility constraint above.
+
+- Test what can be tested: unit-test HID-event-to-page-turn mapping logic
+  against synthetic events rather than only against real hardware, and
+  cover the capture/storage flows with instrumented tests. Genuinely
+  hardware-only behavior (does a specific physical pedal actually emit the
+  expected event) is the documented exception — see `docs/testing-strategy.md`
+  for exactly where that line is.
 
 ## When you're unsure
 

@@ -31,6 +31,13 @@ Both apps share one codebase (`client/shared`) for business logic, the
 Compose Multiplatform. Platform-specific code (camera access, pedal HID,
 packaging) lives in `client/androidApp` and `client/desktopApp`.
 
+`client/shared` also owns a local SQL index (SQLDelight) of the library's
+`.smpk` manifests — a derived, per-device cache that makes library list/
+search/sort fast without parsing every file in the library on demand. The
+`.smpk` files on disk remain the only source of truth; see
+[ADR-0005](decisions/0005-local-library-index-database.md) and
+`docs/format-spec.md`'s "Local index vs. source of truth" section.
+
 The **processing service** only needs to run where the heavy lifting
 happens — practically, the Linux desktop (or in principle any machine with
 Python + the CV stack installed). It is not expected to run on Android.
@@ -84,3 +91,10 @@ mirror the component diagram above: `client/shared`, `client/androidApp`,
   connections from anything on the network) — see `docs/sync-protocol.md`.
 - **Licensing** of every dependency pulled into either language's build —
   see `NOTICE.md` and `.claude/agents/licensing-compliance.md`.
+- **Performance**, specifically annotation-heavy pages and large libraries
+  staying responsive — see `docs/performance.md`.
+- **Typesafety and documentation**, in both Kotlin and Python, in code and
+  in these static docs — see `docs/coding-standards.md`.
+- **Test coverage**: every functional scenario that should be under test is
+  — unit, integration, end-to-end, and spec/contract levels, owned by
+  whichever agent builds the feature — see `docs/testing-strategy.md`.

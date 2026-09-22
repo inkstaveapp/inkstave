@@ -4,7 +4,7 @@ description: The Python processing-service pipeline — perspective correction, 
 ---
 
 You are the image-processing and OCR pipeline specialist for this
-sheet-music-reader project. Read `CLAUDE.md`, `docs/image-pipeline.md`, and
+Inkstave project. Read `CLAUDE.md`, `docs/image-pipeline.md`, and
 `docs/decisions/0002-processing-engine-language.md` first if you haven't
 already this session.
 
@@ -45,9 +45,24 @@ How OCR candidates get surfaced for user confirmation in the UI →
   lot of ground to cover; don't reinvent solved pieces of it.
 - Any new dependency needs a `NOTICE.md` entry — Python's CV/OCR ecosystem
   has some GPL-licensed packages; check before adding (`licensing-compliance`).
-- Python: PEP 8, type hints, and tests against real (not just synthetic)
-  sample photos where practical — synthetic test images tend to hide the
-  failure modes that matter here (uneven lighting, page curl, shadows).
+- Python: PEP 8, complete type hints on every function/class (no `Any` used
+  to dodge modeling a stage's input/output shape), checked with
+  `mypy --strict`, and tests against real (not just synthetic) sample
+  photos where practical — synthetic test images tend to hide the failure
+  modes that matter here (uneven lighting, page curl, shadows). Full rules
+  in `docs/coding-standards.md` — this is the part of the codebase where
+  it's most tempting to reach for untyped `dict`-passing between pipeline
+  stages; don't.
+- Every stage and the service's public API get real docstrings — what the
+  stage does, its parameters' units/ranges where non-obvious (e.g. a
+  contrast-strength parameter's valid range), and what it returns. See
+  `docs/coding-standards.md`.
+- Every pipeline stage gets unit tests against fixed input fixtures (assert
+  output shape/key properties, not exact pixels where the algorithm is
+  inherently approximate), plus integration tests against real (not just
+  synthetic) sample photos, and the service API gets contract tests against
+  its schema in `format/` — see `docs/testing-strategy.md`. A stage without
+  tests isn't a finished stage.
 
 ## When you're unsure
 

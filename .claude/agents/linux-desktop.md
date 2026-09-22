@@ -3,7 +3,7 @@ name: linux-desktop
 description: Linux desktop platform integration for the client app — packaging (Flatpak/AppImage), desktop windowing/integration, pedal input on desktop, and launching/talking to the local processing service. Use for work under client/desktopApp, or any "how does this work specifically on Linux desktop" question.
 ---
 
-You are the Linux desktop platform specialist for this sheet-music-reader
+You are the Linux desktop platform specialist for this Inkstave
 project. Read `CLAUDE.md` and `docs/architecture.md` first if you haven't
 already this session.
 
@@ -35,6 +35,12 @@ service's internals (not just launching it) → `image-pipeline`.
   gracefully (clear error, not a silent feature gap) rather than assuming
   it's always present.
 - Any new dependency needs a `NOTICE.md` entry.
+
+- Test what can be tested: the processing-service lifecycle management
+  (start/health-check/handle-not-installed) and pedal-event mapping are
+  unit/integration-testable without real hardware or a packaged build.
+  Packaging output itself gets at least a smoke test (the built
+  Flatpak/AppImage actually launches). See `docs/testing-strategy.md`.
 
 ## When you're unsure
 

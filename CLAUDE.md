@@ -5,10 +5,10 @@ else in this repository.
 
 ## What this project is
 
-A cross-platform (Android + Linux desktop, v1) sheet-music viewer/annotator
-with live phone-to-desktop capture and processing, and multi-device sync. See
-[README.md](README.md) for the product pitch and [ROADMAP.md](ROADMAP.md) for
-what phase we're in.
+**Inkstave** is a cross-platform (Android + Linux desktop, v1) sheet-music
+viewer/annotator with live phone-to-desktop capture and processing, and
+multi-device sync. See [README.md](README.md) for the product pitch and
+[ROADMAP.md](ROADMAP.md) for what phase we're in.
 
 ## How this project is developed
 
@@ -44,6 +44,11 @@ re-litigate them without the human explicitly asking:
 4. **OMR (true music-notation recognition):** out of scope for v1. The score
    format reserves room for it later.
    ([ADR-0004](docs/decisions/0004-omr-scope.md))
+5. **Local data:** `.smpk` files on disk are the only source of truth. A
+   local SQL index (SQLDelight) is a derived, per-device, rebuildable cache
+   used purely for fast library search/sort — never synced, never the only
+   copy of anything.
+   ([ADR-0005](docs/decisions/0005-local-library-index-database.md))
 
 ## Where to look
 
@@ -53,6 +58,9 @@ re-litigate them without the human explicitly asking:
 | What does the `.smpk` score file actually contain? | `docs/format-spec.md` |
 | How do devices find and talk to each other? | `docs/sync-protocol.md` |
 | What does the capture → clean-up → OCR pipeline do, step by step? | `docs/image-pipeline.md` |
+| What keeps dense-annotation pages and large libraries fast? | `docs/performance.md` |
+| What are the typesafety/documentation rules? | `docs/coding-standards.md` |
+| What needs a test, at what level? | `docs/testing-strategy.md` |
 | What's built, what's next? | `ROADMAP.md` |
 | Why was X decided this way? | `docs/decisions/*.md` |
 
@@ -89,6 +97,22 @@ relevant domain context and constraints:
 - Every new third-party dependency (library, model, font, dataset) must be
   license-checked and recorded in `NOTICE.md` before or alongside the commit
   that introduces it. Use the `licensing-compliance` agent for this.
+- **Typesafe everywhere, including Python.** No untyped Python, no `Any`
+  used to dodge modeling a type properly, `mypy --strict` (or equivalent) as
+  a CI gate once CI exists. See `docs/coding-standards.md` — this applies to
+  every language in this repo without exception.
+- **Document as you go, in both layers.** Every public function/class/module
+  gets a real doc comment (KDoc/docstring) explaining purpose and non-obvious
+  behavior — not a restated signature. Every doc in `docs/` that describes
+  behavior you just changed gets updated in the same change. Undocumented
+  public API or a stale doc is incomplete work, not a follow-up. See
+  `docs/coding-standards.md`.
+- **If it should be tested, it is tested.** Every functional scenario —
+  unit, integration, end-to-end, or spec/contract level, whichever is
+  cheapest and still catches the regression — gets a test as part of
+  implementing it, not as a follow-up. Write the tests for a feature
+  yourself when you build it; don't hand that off. See
+  `docs/testing-strategy.md`.
 - Prefer small, reviewable commits. The human reviews history, so keep
   messages accurate about *why*, not just *what*.
 - This is greenfield: don't build speculative abstractions ahead of the

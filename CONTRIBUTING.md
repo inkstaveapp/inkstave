@@ -42,11 +42,24 @@ feature branches, PRs reviewed before merge, CI green before merge.
 
 ## Code style
 
+Full standards live in [docs/coding-standards.md](docs/coding-standards.md)
+— summary:
+
 - **Kotlin:** follow the [official Kotlin coding
   conventions](https://kotlinlang.org/docs/coding-conventions.html);
-  formatting/linting tooling gets pinned in M0.
-- **Python:** follow [PEP 8](https://peps.python.org/pep-0008/) with type
-  hints; formatting/linting tooling gets pinned in M0.
+  formatting/linting tooling gets pinned in M0. No `Any`/unchecked casts/`!!`
+  as a way to dodge modeling a type properly.
+- **Python:** follow [PEP 8](https://peps.python.org/pep-0008/) with
+  complete type hints, checked with `mypy --strict` (or equivalent) as a
+  required CI gate, not an optional lint — Python code here is held to the
+  same typesafety bar as the Kotlin side, not a looser one.
+- **Documentation is not optional:** every public function/class/module gets
+  a real doc comment (KDoc/docstring), and any `docs/*.md` that describes
+  behavior you changed gets updated in the same change.
+- **Tests are not optional either:** see
+  [docs/testing-strategy.md](docs/testing-strategy.md) — every functional
+  scenario worth testing gets a test (unit/integration/e2e/spec, whichever
+  fits) written alongside the change that introduces it.
 
 ## Licensing
 

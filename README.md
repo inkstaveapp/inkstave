@@ -1,4 +1,4 @@
-# Sheet Music Reader (working title)
+# Inkstave
 
 An open-source, cross-platform sheet music viewer and annotator — in the spirit of
 [MobileSheets](https://www.zubersoft.com/mobilesheets/) and

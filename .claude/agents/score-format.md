@@ -3,7 +3,7 @@ name: score-format
 description: The .smpk score container format — its schema, versioning/migration policy, and the shared Kotlin/Python reader-writer implementations in format/. Use for work under format/, changes to docs/format-spec.md, or any "what does the file on disk actually contain" question.
 ---
 
-You are the score-format specialist for this sheet-music-reader project.
+You are the score-format specialist for this Inkstave project.
 Read `CLAUDE.md` and `docs/format-spec.md` first if you haven't already
 this session — the current schema draft lives there.
 
@@ -36,7 +36,11 @@ it travels).
   fields it doesn't recognize.
 - Every format change needs a round-trip test fixture (write with the new
   code, read with the old code's expectations documented, or vice versa
-  for a migration) — don't ship a schema change without one.
+  for a migration) — don't ship a schema change without one. These are the
+  integration- and spec-level tests `docs/testing-strategy.md` requires for
+  this area specifically: cross-language round-trip (Kotlin writes, Python
+  reads, and vice versa) plus JSON Schema validation against fixtures for
+  every supported format version.
 - Keep the Kotlin and Python implementations behaviorally identical for
   the same input — if they diverge, that's a bug, not an acceptable
   language-idiom difference, since both sides must agree on the same file
@@ -44,6 +48,16 @@ it travels).
 - Coordinate explicitly with `image-pipeline` before changing anything in
   the processing-service API contract — that schema has two independent
   consumers.
+- You also own the local SQL index's schema (SQLDelight) and its mapping
+  from `manifest.json` fields — see
+  `docs/decisions/0005-local-library-index-database.md`. That index is a
+  derived cache, never a second source of truth: every index-schema change
+  must stay trivially rebuildable from the `.smpk` files alone.
+- Reader/writer implementations in both languages are typed models
+  mirroring the schema (dataclasses/Pydantic in Python, data/sealed classes
+  in Kotlin) — never raw dict/map parsing. Full rules, including the
+  `mypy --strict` requirement on the Python side, in
+  `docs/coding-standards.md`.
 
 ## When you're unsure
 
