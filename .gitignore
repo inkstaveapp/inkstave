@@ -10,12 +10,8 @@ captures/
 *.apk
 *.aab
 
-# Compose Multiplatform / desktop packaging output
-client/desktopApp/build/
-
 # Python
-processing-service/.venv/
-processing-service/__pycache__/
+.venv/
 **/__pycache__/
 *.py[cod]
 *.egg-info/

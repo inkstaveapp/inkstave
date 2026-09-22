@@ -1,0 +1,67 @@
+name: CI
+
+# No remote/hosted repo exists yet (see README.md) -- this workflow file is
+# scaffolded ahead of that per ROADMAP.md M0, so it's ready to run the
+# moment a remote/Actions are set up. It isn't invoked by anything yet.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  kotlin:
+    name: Kotlin (client/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Accept Android SDK licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: ktlintCheck
+        working-directory: client
+        run: ./gradlew ktlintCheck --console=plain
+      - name: Unit + desktop tests
+        working-directory: client
+        run: ./gradlew :shared:test :shared:desktopTest --console=plain
+      - name: Build desktop app
+        working-directory: client
+        run: ./gradlew :desktopApp:build --console=plain
+      - name: Build Android debug APK
+        working-directory: client
+        run: ./gradlew :androidApp:assembleDebug --console=plain
+
+  python:
+    name: Python (format/python, processing-service)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install format/python
+        working-directory: format/python
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: format/python: ruff, mypy --strict, pytest
+        working-directory: format/python
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/mypy src/inkstave_format tests
+          .venv/bin/python -m pytest -q
+      - name: Install processing-service (depends on format/python)
+        working-directory: processing-service
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ../format/python
+          .venv/bin/pip install -e ".[dev]"
+      - name: processing-service: ruff, mypy --strict, pytest
+        working-directory: processing-service
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/mypy src/inkstave_processing tests
+          .venv/bin/python -m pytest -q

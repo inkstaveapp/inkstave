@@ -1,0 +1,22 @@
+{
+  "id": "page-1",
+  "width": 2480,
+  "height": 3508,
+  "aspectRatioClass": "a4",
+  "processing": {
+    "cropPolygon": [[12.0, 8.0], [2468.0, 10.0], [2470.0, 3500.0], [10.0, 3498.0]],
+    "dewarpMeshVersion": "v1",
+    "contrastMethod": "adaptive-threshold"
+  },
+  "ocr": {
+    "engineVersion": "tesseract-5.4.0",
+    "candidates": {
+      "title": "Clair de Lune",
+      "composer": "Claude Debussy"
+    },
+    "confidence": {
+      "title": 0.92,
+      "composer": 0.81
+    }
+  }
+}

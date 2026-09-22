@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inkstave-processing"
+version = "0.1.0"
+description = "Inkstave's desktop-side image processing & OCR pipeline (docs/image-pipeline.md)"
+requires-python = ">=3.12"
+dependencies = [
+    "inkstave-format",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.14", "ruff>=0.8", "pytest>=8.3", "httpx>=0.27"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inkstave_processing"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

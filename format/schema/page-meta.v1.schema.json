@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkstave.app/schema/page-meta.v1.schema.json",
+  "title": "Inkstave pages/<page-id>.meta.json (format v1)",
+  "description": "Advisory/reproducibility data populated by the processing service. See docs/format-spec.md, 'pages/<page-id>.meta.json', and docs/image-pipeline.md.",
+  "type": "object",
+  "required": ["id", "width", "height", "aspectRatioClass"],
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "width": { "type": "integer", "minimum": 0 },
+    "height": { "type": "integer", "minimum": 0 },
+    "aspectRatioClass": { "enum": ["a4", "letter", "custom"] },
+    "processing": { "$ref": "#/$defs/processing" },
+    "ocr": { "$ref": "#/$defs/ocr" }
+  },
+  "$defs": {
+    "processing": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cropPolygon": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "dewarpMeshVersion": { "type": ["string", "null"] },
+        "contrastMethod": { "type": ["string", "null"] }
+      }
+    },
+    "ocr": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "engineVersion": { "type": "string" },
+        "candidates": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Proposed field values (title/composer/...). Never auto-committed to manifest.json -- see docs/image-pipeline.md."
+        },
+        "confidence": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inkstave-format"
+version = "0.1.0"
+description = "Typed Python models and JSON Schema validation for the Inkstave .smpk score format"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.9,<3", "jsonschema>=4.23,<5"]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.14", "ruff>=0.8", "pytest>=8.3"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inkstave_format"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

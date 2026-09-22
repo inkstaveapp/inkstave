@@ -1,0 +1,48 @@
+# Requires `pip install pre-commit` locally, then `pre-commit install` once
+# per clone. Not installed globally by anything in this repo -- see
+# CONTRIBUTING.md.
+#
+# Kotlin (ktlint) and Python (ruff, mypy) hooks shell out to the same
+# tooling CI runs (.github/workflows/ci.yml), so a local pre-commit pass and
+# a CI pass should agree.
+repos:
+  - repo: local
+    hooks:
+      - id: ktlint
+        name: ktlint (client/)
+        entry: bash -c 'cd client && ./gradlew ktlintCheck --console=plain'
+        language: system
+        files: ^client/.*\.kts?$
+        pass_filenames: false
+
+      - id: ruff-format-check
+        name: python-format-check
+        alias: ruff-format-check
+        entry: bash -c 'set -e; for d in format/python processing-service; do (cd "$d" && .venv/bin/ruff format --check .); done'
+        language: system
+        files: \.py$
+        pass_filenames: false
+
+      - id: ruff-lint
+        name: ruff (format/python, processing-service)
+        entry: bash -c 'set -e; for d in format/python processing-service; do (cd "$d" && .venv/bin/ruff check .); done'
+        language: system
+        files: \.py$
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy --strict (format/python, processing-service)
+        entry: bash -c 'set -e; (cd format/python && .venv/bin/mypy src/inkstave_format tests); (cd processing-service && .venv/bin/mypy src/inkstave_processing tests)'
+        language: system
+        files: \.py$
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'
+      - id: end-of-file-fixer
+      - id: check-json
+      - id: check-yaml
+      - id: check-merge-conflict

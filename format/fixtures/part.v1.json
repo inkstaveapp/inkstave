@@ -1,0 +1,5 @@
+{
+  "id": "part-piano",
+  "name": "Piano",
+  "pageOrder": ["page-1", "page-2", "page-3"]
+}

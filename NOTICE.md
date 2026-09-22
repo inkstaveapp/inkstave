@@ -20,23 +20,52 @@ Rules:
   "about"/licenses screens, note that in the Notes column so the client app
   can surface it.
 
+**M0 scope note:** the tables below list the *direct* dependencies declared
+in `client/gradle/libs.versions.toml` and the two `pyproject.toml` files as
+of M0 scaffolding -- not an exhaustive transitive-dependency scan. A full
+scan (e.g. a Gradle license-report plugin for `client/`, `pip-licenses` for
+the Python side) is real follow-up work `licensing-compliance` should run
+before any release (`ROADMAP.md` M7), not something done by hand here.
+
 ## Client (Kotlin Multiplatform / Android / Linux desktop)
 
 | Dependency | Version | License | Notes |
 |---|---|---|---|
-| _none yet_ | | | |
+| Kotlin / Kotlin Multiplatform Gradle plugin | 2.2.20 | Apache-2.0 | |
+| Compose Multiplatform (org.jetbrains.compose) | 1.12.1 | Apache-2.0 | |
+| kotlinx.serialization | 1.9.0 | Apache-2.0 | JSON (de)serialization for the `.smpk` format models. |
+| Android Gradle Plugin (com.android.tools.build:gradle) | 9.4.0 | Apache-2.0 | Build-time only, not shipped in the app. |
+| AndroidX activity-compose | 1.11.0 | Apache-2.0 | |
+| AndroidX core-ktx | 1.16.0 | Apache-2.0 | |
+| SQLDelight (app.cash.sqldelight) | 2.3.2 | Apache-2.0 | Local library index, ADR-0005. |
+| ktlint-gradle (org.jlleitschuh.gradle.ktlint) | 14.2.0 | MIT | Dev tooling; wraps ktlint (also MIT). |
+
+**Not added: detekt.** Tried at 1.23.8 (current stable); fails to
+configure against AGP 8.11.1/9.x with a `NoClassDefFoundError`. detekt 2.0
+(which does target current AGP) is alpha-only. See the comment at the top
+of `client/build.gradle.kts`. Revisit once a stable, AGP-9-compatible
+detekt release exists.
 
 ## Processing service (Python)
 
 | Dependency | Version | License | Notes |
 |---|---|---|---|
-| _none yet_ | | | |
+| FastAPI | \>=0.115 (0.120.x installed) | MIT | Local HTTP API, loopback-only (`docs/image-pipeline.md`). |
+| uvicorn | \>=0.32 (0.38.x installed) | BSD-3-Clause | ASGI server FastAPI runs on. |
+| httpx | \>=0.27 (dev/test only) | BSD-3-Clause | Used transitively by FastAPI's `TestClient`. |
+
+`inkstave-processing` also depends on `inkstave-format` (below), installed
+locally/editable from `format/python` -- not a third-party dependency.
 
 ## Format tooling
 
 | Dependency | Version | License | Notes |
 |---|---|---|---|
-| _none yet_ | | | |
+| pydantic | \>=2.9 (2.13.x installed) | MIT | Typed models for `.smpk` JSON documents. |
+| jsonschema | \>=4.23 (4.26.x installed) | MIT | Validates against `format/schema/*.schema.json`. |
+| mypy | \>=1.14 (dev-only, shared by `format/python` and `processing-service`) | MIT | `mypy --strict`, required per `docs/coding-standards.md`. |
+| ruff | \>=0.8 (dev-only, shared) | MIT | Lint + format for both Python projects. |
+| pytest | \>=8.3 (dev-only, shared) | MIT | |
 
 ## Fonts / assets / models
 

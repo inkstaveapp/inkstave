@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkstave.app/schema/part.v1.schema.json",
+  "title": "Inkstave parts/<part-id>/part.json (format v1)",
+  "description": "See docs/format-spec.md, 'parts/<part-id>/part.json'.",
+  "type": "object",
+  "required": ["id", "name", "pageOrder"],
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "e.g. \"Trumpet in B♭\", \"Piano\", \"Full Score\"."
+    },
+    "pageOrder": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Page ids in display order for this part."
+    }
+  }
+}

@@ -1,0 +1,43 @@
+[versions]
+# Kotlin 2.2.20 is the version Compose Multiplatform 1.12.1 explicitly
+# recommends (https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html).
+#
+# AGP 9.1.1 rather than the Kotlin Multiplatform plugin's own documented
+# "up to 8.11.1" range (https://kotlinlang.org/docs/multiplatform/multiplatform-compatibility-guide.html):
+# every current Compose Multiplatform release's Android artifacts (as far
+# back as 1.9.0) require AGP 9.1+ and compileSdk 37 -- confirmed empirically
+# here (`androidx.compose.*:1.12.1 requires Android Gradle plugin 9.1.0 or
+# higher`), so staying on AGP 8.x to match KMP's documented range isn't
+# actually an option if the client uses a current Compose Multiplatform.
+# AGP 9.1.1 is the minimum version satisfying that Compose requirement, to
+# minimise how far ahead of Kotlin's documented range this build sits.
+kotlin = "2.2.20"
+agp = "9.4.0"
+composeMultiplatform = "1.12.1"
+sqldelight = "2.3.2"
+kotlinxSerialization = "1.9.0"
+ktlintGradle = "14.2.0"
+# detekt dropped for M0 -- see the comment at the top of build.gradle.kts.
+
+androidxActivityCompose = "1.11.0"
+androidxCoreKtx = "1.16.0"
+
+[libraries]
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCoreKtx" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidLibrary = { id = "com.android.library", version.ref = "agp" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkstave.app/schema/annotations.v1.schema.json",
+  "title": "Inkstave annotations/<page-id>.json (format v1)",
+  "description": "Vector annotation layer for one page, in normalized page-point space. See docs/format-spec.md, 'annotations/<page-id>.json', and docs/performance.md.",
+  "type": "object",
+  "required": ["pageId", "layerVersion"],
+  "additionalProperties": true,
+  "properties": {
+    "pageId": { "type": "string", "minLength": 1 },
+    "layerVersion": { "type": "integer", "minimum": 1 },
+    "strokes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stroke" },
+      "default": []
+    },
+    "stamps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stamp" },
+      "default": []
+    },
+    "highlights": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/highlight" },
+      "default": []
+    },
+    "textNotes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/textNote" },
+      "default": []
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "stroke": {
+      "type": "object",
+      "required": ["id", "points", "color", "widthPt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/point" },
+          "minItems": 1
+        },
+        "color": { "type": "string" },
+        "widthPt": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "stamp": {
+      "type": "object",
+      "required": ["id", "symbol", "x", "y", "scale", "rotationDeg"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "symbol": { "type": "string", "minLength": 1 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "scale": { "type": "number", "exclusiveMinimum": 0 },
+        "rotationDeg": { "type": "number" }
+      }
+    },
+    "highlight": {
+      "type": "object",
+      "required": ["id", "rectPt", "color"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "rectPt": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "color": { "type": "string" }
+      }
+    },
+    "textNote": {
+      "type": "object",
+      "required": ["id", "x", "y", "text", "fontSizePt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "text": { "type": "string" },
+        "fontSizePt": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

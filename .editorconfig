@@ -1,0 +1,27 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+indent_size = 4
+# Compose Multiplatform convention names composable functions in PascalCase
+# (e.g. `fun App()`), which ktlint's default function-naming rule would
+# otherwise flag as a style violation -- this tells ktlint to allow it
+# specifically for @Composable-annotated functions rather than disabling
+# the naming rule project-wide.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+[*.py]
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

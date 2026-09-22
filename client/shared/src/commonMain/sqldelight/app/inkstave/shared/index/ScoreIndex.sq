@@ -1,0 +1,55 @@
+-- Local library index (ADR-0005, docs/decisions/0005-local-library-index-database.md).
+--
+-- This table is a DERIVED CACHE, never the source of truth: every row here
+-- mirrors fields already present in some `.smpk`'s manifest.json on disk
+-- (docs/format-spec.md). It exists purely so the library screen can list,
+-- search, and sort without opening and parsing every `.smpk` file on every
+-- interaction (docs/performance.md). It must always be safe to drop this
+-- table and rebuild it by rescanning the library folder.
+--
+-- `tagsCsv` stores manifest.tags as a comma-joined string rather than a
+-- normalized join table -- a deliberate simplification for this scaffolding
+-- pass (M0); revisit with a proper tags table once tag-based filtering is
+-- an actual feature (M1+).
+CREATE TABLE scoreIndexEntry (
+    id TEXT NOT NULL PRIMARY KEY,
+    filePath TEXT NOT NULL,
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    composer TEXT,
+    arranger TEXT,
+    lyricist TEXT,
+    genre TEXT,
+    tagsCsv TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    modifiedAt TEXT NOT NULL,
+    indexedAt TEXT NOT NULL
+);
+
+CREATE INDEX scoreIndexEntry_title ON scoreIndexEntry (title);
+
+upsert:
+INSERT OR REPLACE INTO scoreIndexEntry (
+    id, filePath, title, subtitle, composer, arranger, lyricist, genre, tagsCsv, createdAt, modifiedAt, indexedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM scoreIndexEntry ORDER BY title COLLATE NOCASE ASC;
+
+selectById:
+SELECT * FROM scoreIndexEntry WHERE id = :id;
+
+searchByTitleOrComposer:
+SELECT * FROM scoreIndexEntry
+WHERE title LIKE '%' || :query || '%' COLLATE NOCASE
+   OR composer LIKE '%' || :query || '%' COLLATE NOCASE
+ORDER BY title COLLATE NOCASE ASC;
+
+deleteById:
+DELETE FROM scoreIndexEntry WHERE id = :id;
+
+deleteAll:
+DELETE FROM scoreIndexEntry;
+
+countAll:
+SELECT COUNT(*) FROM scoreIndexEntry;

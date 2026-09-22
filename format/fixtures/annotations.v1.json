@@ -1,0 +1,38 @@
+{
+  "pageId": "page-1",
+  "layerVersion": 1,
+  "strokes": [
+    {
+      "id": "stroke-1",
+      "points": [[10.5, 20.0], [12.0, 21.5], [13.5, 22.0]],
+      "color": "#FF0000",
+      "widthPt": 1.5
+    }
+  ],
+  "stamps": [
+    {
+      "id": "stamp-1",
+      "symbol": "fermata",
+      "x": 100.0,
+      "y": 50.0,
+      "scale": 1.0,
+      "rotationDeg": 0.0
+    }
+  ],
+  "highlights": [
+    {
+      "id": "highlight-1",
+      "rectPt": [40.0, 60.0, 120.0, 80.0],
+      "color": "#FFFF0080"
+    }
+  ],
+  "textNotes": [
+    {
+      "id": "note-1",
+      "x": 200.0,
+      "y": 300.0,
+      "text": "watch the pedal here",
+      "fontSizePt": 10.0
+    }
+  ]
+}

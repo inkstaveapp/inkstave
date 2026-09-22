@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkstave.app/schema/manifest.v1.schema.json",
+  "title": "Inkstave manifest.json (format v1)",
+  "description": "Schema for a .smpk package's manifest.json, format version 1. See docs/format-spec.md in the repo root for the authoritative prose spec this mirrors.",
+  "type": "object",
+  "required": ["formatVersion", "id", "title", "createdAt", "modifiedAt", "source"],
+  "additionalProperties": true,
+  "properties": {
+    "formatVersion": {
+      "const": 1,
+      "description": "Gates the whole package. See docs/format-spec.md 'Versioning & migration policy'."
+    },
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "subtitle": { "type": ["string", "null"] },
+    "composer": { "type": ["string", "null"] },
+    "arranger": { "type": ["string", "null"] },
+    "lyricist": { "type": ["string", "null"] },
+    "genre": { "type": ["string", "null"] },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "parts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Part ids, each with a parts/<part-id>/part.json. Always at least one entry, even for a single-part score.",
+      "default": []
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "modifiedAt": { "type": "string", "format": "date-time" },
+    "source": { "$ref": "#/$defs/source" }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "enum": ["pdf-import", "image-import", "camera-capture"]
+        },
+        "details": {
+          "type": "object",
+          "description": "Type-specific fields (e.g. original filename). Deliberately unenumerated -- see docs/format-spec.md.",
+          "default": {}
+        }
+      }
+    }
+  }
+}
