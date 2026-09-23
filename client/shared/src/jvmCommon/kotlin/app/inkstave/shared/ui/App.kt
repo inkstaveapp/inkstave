@@ -35,6 +35,10 @@ private sealed interface Screen {
  * @param importer writes newly-picked PDFs/images into the library as `.smpk` files.
  * @param pickPdf launches the platform's file picker for a single PDF; `null` means the user cancelled.
  * @param pickImages launches the platform's file picker for one or more image files, in the order to import them.
+ * @param captureImages launches the in-app camera capture flow (`ROADMAP.md` M4), returning the finished
+ *   batch of page photos in capture order -- `null` (desktop's default) means this platform has no camera
+ *   capture flow at all, in which case [LibraryScreen] simply doesn't offer it, rather than offering an
+ *   action that would always fail or do nothing.
  * @param pedalMapping current pedal key bindings (`ROADMAP.md` M3); [onPedalMappingChange] persists a change
  *   the user makes in [PedalSettingsScreen] -- the platform entry point (`MainActivity`/`Main.kt`) owns
  *   actually saving it via `PedalSettingsStore`, the same division of responsibility `LibraryImporter`
@@ -50,6 +54,7 @@ fun App(
     importer: LibraryImporter,
     pickPdf: suspend () -> PickedFile?,
     pickImages: suspend () -> List<PickedFile>,
+    captureImages: (suspend () -> List<PickedFile>)? = null,
     pedalMapping: PedalKeyMapping,
     onPedalMappingChange: (PedalKeyMapping) -> Unit,
     onRawKeyHandlerChange: (((Key) -> Boolean)?) -> Unit = {},
@@ -64,6 +69,7 @@ fun App(
                     importer = importer,
                     pickPdf = pickPdf,
                     pickImages = pickImages,
+                    captureImages = captureImages,
                     onOpenScore = { filePath -> screen = Screen.Viewer(filePath) },
                     onOpenPedalSettings = { screen = Screen.PedalSettings },
                 )

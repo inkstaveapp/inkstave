@@ -19,7 +19,8 @@ client/
 │                 real library/viewer/annotation/pedal-settings Compose
 │                 screens (jvmCommon -- see "jvmCommon" below)
 ├── androidApp/   Android application module: Compose entry point, SAF-backed
-│                 file pickers (DocumentPicker.kt)
+│                 file pickers (DocumentPicker.kt), and the camera capture
+│                 flow (CaptureActivity.kt/CameraCapture.kt, M4)
 ├── desktopApp/   Linux desktop JVM application: Compose Desktop entry point,
 │                 JFileChooser-backed file pickers (DesktopFilePicker.kt)
 └── gradle/libs.versions.toml   Version catalog -- the source of truth for
@@ -43,10 +44,12 @@ a PDF or a set of images, list the library from the local index, view a
 score with swipe/tap/keyboard/pedal page turning, annotate pages (pen,
 highlight, stamps, text, undo/redo, persisted back into the `.smpk`), remap
 pedal bindings (`PedalSettingsScreen`), and enter a minimal-chrome
-performance mode. Capture/sync and multi-part scores are still ahead (M4+).
-**Not done yet, and not claimed:** M3's pedal support has never touched
-real pedal hardware -- see `ROADMAP.md`'s M3 entry for exactly what is and
-isn't verified.
+performance mode. M4's first client-side slice is also real: capture photos
+with the device camera and import them the same way as any other image set
+(`CaptureActivity.kt`). LAN sync and multi-part scores are still ahead.
+**Not done yet, and not claimed:** M3's pedal support and M4's camera
+capture have never touched real hardware -- see `ROADMAP.md`'s M3 and M4
+entries for exactly what is and isn't verified in each case.
 
 **Android hardware key events (`MainActivity.dispatchKeyEvent`):**
 `ViewerScreen`/`PedalSettingsScreen` both listen for keys via Compose's own
@@ -110,22 +113,30 @@ a comment at its call site, not just noted here:
   round-trips at best. If a future dependency genuinely needs `google()`
   and doesn't match those group patterns, widen the filter rather than
   removing it.
-- **The `compose.uiTest` dependency (`desktopTest`, for `ui/AppUiTest.kt`)
-  has not been build-verified as of the session that added it.** The
-  declaration is confirmed correct (Gradle reaches the actual network call,
-  past script compilation), but that session's environment had a
-  JVM-specific outbound-network restriction that blocked downloading it
-  specifically (`curl`/`python3` reached Maven Central fine from the same
-  shell; a plain `java` process consistently could not -- this looked like
-  a per-binary restriction on that machine, not a real connectivity
-  problem, and not something present in earlier sessions that successfully
-  downloaded dozens of other dependencies). Run
-  `./gradlew :shared:desktopTest` with working network access to confirm;
-  see `ROADMAP.md`'s M1 entry for the full account, including why the
-  Android instrumented equivalent was written but deliberately left
-  unwired. `ui/PedalSettingsUiTest.kt` (M3) hits the identical wall for the
-  identical reason -- everything else M3 added (`pedal/` package,
-  `SoftKeyboard.kt`) needed no new dependency and is fully verified.
+- **The JVM-specific outbound-network restriction earlier sessions hit
+  (M1-M3) is intermittent, not a permanent property of this environment --
+  don't assume a new dependency will hit it.** M1-M3 all documented a
+  session where `curl`/`python3` reached Maven Central fine but a plain
+  `java`/Gradle process consistently could not, which blocked
+  `compose.uiTest` from ever being downloaded. M4's camera-capture pass hit
+  no such restriction at all: CameraX (four new `androidx.camera:*`
+  artifacts) resolved and `:androidApp:assembleDebug`/
+  `:androidApp:testDebugUnitTest` both passed for real, and in the same
+  session, `compose.uiTest` *also* finally resolved -- see the next point.
+- **`compose.uiTest` now resolves, and `ui/AppUiTest.kt`/`ui/PedalSettingsUiTest.kt`
+  now compile -- but fail at runtime with `org.jetbrains.skiko.LibraryLoadException`,
+  a different, more specific problem than the resolution issue above.**
+  Compiling them for the first time also surfaced a real, unrelated latent
+  bug: `AppUiTest.kt` (M1) had never been updated for M3's
+  `pedalMapping`/`onPedalMappingChange` parameters on `App()`, since nothing
+  had ever compiled it to notice -- fixed alongside this finding (see
+  `ROADMAP.md`'s M4 entry). The remaining `LibraryLoadException` is a native
+  Skia library loading failure in this specific sandboxed environment (most
+  likely a missing system library `Skiko`'s headless renderer needs, e.g.
+  fontconfig/Mesa -- not diagnosed further here, out of scope for the pass
+  that found it). Run `./gradlew :shared:desktopTest` in an environment with
+  a normal desktop graphics stack to check whether this reproduces there; if
+  it doesn't, it's specific to this sandbox, not the test code.
 
 None of these are permanent -- they're the actual state of the Kotlin/AGP/
 Compose ecosystem transition happening right as this was scaffolded, and

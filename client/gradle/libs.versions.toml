@@ -27,6 +27,11 @@ androidxCoreKtx = "1.16.0"
 # Android -- that target renders PDFs with the platform's built-in
 # android.graphics.pdf.PdfRenderer instead, so this dependency never ships in the APK.
 pdfbox = "3.0.7"
+# CameraX 1.6.2 (current stable per developer.android.com/jetpack/androidx/releases/camera,
+# verified live -- released 2026-08-26): M4's Android-only camera capture flow
+# (ROADMAP.md). Android-only, like PdfRenderer above; camera-view specifically
+# for PreviewView, the standard CameraX live-preview widget.
+camerax = "1.6.2"
 
 [libraries]
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
@@ -37,6 +42,10 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCoreKtx" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

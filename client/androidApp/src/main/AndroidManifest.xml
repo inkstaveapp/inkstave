@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- M4 camera capture (CaptureActivity.kt): requested at runtime (CameraCapture.kt),
+         this manifest entry is what makes the runtime request possible at all. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- required="false": a camera-less device (rare, but real) can still install and use
+         every other Inkstave feature; only the capture flow itself becomes unavailable,
+         handled at runtime (CameraCapture.kt checks PackageManager.FEATURE_CAMERA_ANY),
+         not something to make the whole app uninstallable over. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
     <application
         android:label="@string/app_name"
         android:allowBackup="true"
@@ -13,6 +24,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- M4: launched by CameraCapture.kt via ActivityResultContracts.StartActivityForResult,
+             the same pattern DocumentPicker.kt uses for the system file picker, just with an
+             in-app Activity instead of a system one; exported=false: only this app launches it. -->
+        <activity
+            android:name=".CaptureActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
     </application>
 
 </manifest>

@@ -275,7 +275,34 @@ remap flow," not a hardcoded guess.
 
 ## M4 — Capture & processing pipeline
 
-- [ ] In-app camera capture flow (Android).
+- [x] In-app camera capture flow (Android): live preview, shutter, multi-photo
+      capture with per-photo retake, feeding the finished batch into M1's
+      existing `LibraryImporter.importImages` path -- the same code whether
+      pages came from the system picker or the camera (`CaptureActivity.kt`,
+      `CameraCapture.kt`, `LibraryScreen.kt`'s new "Capture photos" menu
+      item). CameraX (`androidx.camera:*`, `NOTICE.md`), resolved and
+      **build-verified for real in this pass**: `:androidApp:assembleDebug`
+      (real APK, CameraX included) and `:androidApp:testDebugUnitTest` (6
+      tests: `CaptureUiStateTest`, `CameraCaptureTest` -- the permission
+      -state decision table and the captured-file-to-`PickedFile` conversion,
+      both testable without any camera/CameraX runtime) both pass. `ktlintCheck`
+      and `:shared:test` also pass.
+      **Not verified, and not claimed:** real camera preview/capture
+      behavior -- no physical device or camera-capable emulator available in
+      this environment; left for the repo owner to confirm at a physical
+      device, the same standing caveat M3's pedal entry already states.
+      **A real, pre-existing gap found and fixed as a byproduct, not part of
+      this slice's own scope:** `AppUiTest.kt` (M1) was never updated for M3's
+      `pedalMapping`/`onPedalMappingChange` `App()` parameters, and nothing
+      caught it because `:shared:desktopTest` had been fully blocked by the
+      `compose.uiTest` network-resolution issue since M1 -- fixed (a missing
+      two-argument addition) once that dependency happened to resolve in this
+      session. Doing so surfaced a **different, more specific issue**:
+      `AppUiTest`/`PedalSettingsUiTest` now compile but fail at runtime with
+      `org.jetbrains.skiko.LibraryLoadException` (a native Skia library
+      -loading problem, not a network/dependency-resolution one) -- out of
+      this slice's scope to chase further, but a more actionable lead than
+      the previous vague "network-blocked" state for whoever picks it up.
 - [ ] LAN device discovery and pairing (see `docs/sync-protocol.md`).
 - [ ] Live transfer of captured photos from phone to desktop
       (capture session).

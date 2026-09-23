@@ -48,6 +48,13 @@ import kotlinx.coroutines.withContext
  * "Pedal Settings" action ([onOpenPedalSettings], `ROADMAP.md` M3) is the
  * one navigation entry point into [PedalSettingsScreen] -- there's no
  * other settings surface yet for it to live under.
+ *
+ * [captureImages] (`ROADMAP.md` M4) adds a third "Capture photos" import
+ * option alongside PDF/images when non-`null` (Android only, as of M4 --
+ * `null` on desktop, which has no in-app camera flow). Its result feeds
+ * [importer]'s existing [LibraryImporter.importImages] path -- the exact
+ * same code M1's "import a set of images" already uses, whether the images
+ * came from the system picker or the camera.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +63,7 @@ fun LibraryScreen(
     importer: LibraryImporter,
     pickPdf: suspend () -> PickedFile?,
     pickImages: suspend () -> List<PickedFile>,
+    captureImages: (suspend () -> List<PickedFile>)? = null,
     onOpenScore: (filePath: String) -> Unit,
     onOpenPedalSettings: () -> Unit,
 ) {
@@ -108,6 +116,19 @@ fun LibraryScreen(
             )
         }
 
+    // A capture session's photos have no meaningful filename to derive a title guess from
+    // (CameraCapture.kt names them opaquely, "capture-1.jpg", ...) -- unlike importPdfAction/
+    // importImagesAction above, so this always falls back to "Untitled" rather than the
+    // filename-derived guess those use. Correcting the title is exactly what M4's still-pending
+    // OCR-confirmation UI (ROADMAP.md) will eventually help with; M4's camera-capture slice on
+    // its own doesn't have a better signal to offer yet.
+    fun importCaptureAction(capture: suspend () -> List<PickedFile>) =
+        runImport {
+            val captured = capture()
+            if (captured.isEmpty()) return@runImport
+            importer.importImages(title = "Untitled", imageFiles = captured.map { it.bytes })
+        }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -138,6 +159,13 @@ fun LibraryScreen(
                         onClick = { importImagesAction() },
                         modifier = Modifier.testTag(TestTags.IMPORT_IMAGES_MENU_ITEM),
                     )
+                    if (captureImages != null) {
+                        DropdownMenuItem(
+                            text = { Text("Capture photos") },
+                            onClick = { importCaptureAction(captureImages) },
+                            modifier = Modifier.testTag(TestTags.CAPTURE_PHOTOS_MENU_ITEM),
+                        )
+                    }
                 }
             }
         },
@@ -182,6 +210,7 @@ internal object TestTags {
     const val IMPORT_FAB = "library-fab-import"
     const val IMPORT_PDF_MENU_ITEM = "library-menu-import-pdf"
     const val IMPORT_IMAGES_MENU_ITEM = "library-menu-import-images"
+    const val CAPTURE_PHOTOS_MENU_ITEM = "library-menu-capture-photos"
     const val EMPTY_LIBRARY = "library-empty-state"
     const val SCORE_LIST = "library-score-list"
     const val VIEWER_PAGE_INDICATOR = "viewer-page-indicator"

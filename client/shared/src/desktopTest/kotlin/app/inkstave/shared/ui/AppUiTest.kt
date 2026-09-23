@@ -12,6 +12,7 @@ import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.InkstaveDatabase
 import app.inkstave.shared.index.LibraryIndexRepository
+import app.inkstave.shared.pedal.PedalKeyMapping
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.common.PDRectangle
@@ -79,6 +80,11 @@ class AppUiTest {
                     importer = importer,
                     pickPdf = { PickedFile(bytes = samplePdfBytes(pageCount = 3), displayName = "Sonata.pdf") },
                     pickImages = { emptyList() },
+                    // Not what this scenario exercises (that's PedalSettingsUiTest.kt) -- a
+                    // fixed mapping and a no-op sink are enough to satisfy App's (M3-added,
+                    // non-optional) signature here.
+                    pedalMapping = PedalKeyMapping.DEFAULT,
+                    onPedalMappingChange = {},
                 )
             }
 

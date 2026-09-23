@@ -24,8 +24,9 @@ import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
  * Android entry point. Wires up M1's real dependencies -- the local index
  * database (ADR-0005), the library's on-disk location, the importer, and
  * the SAF-backed file pickers ([DocumentPicker]) -- M3's pedal key mapping
- * (persisted at `filesDir/pedal-settings.json`), and renders the shared
- * [App] composable (`docs/architecture.md`).
+ * (persisted at `filesDir/pedal-settings.json`), M4's in-app camera capture
+ * ([CameraCapture]), and renders the shared [App] composable
+ * (`docs/architecture.md`).
  *
  * The library itself lives in app-specific internal storage
  * (`Context.filesDir`), not shared/public storage: it needs zero runtime
@@ -41,6 +42,11 @@ class MainActivity : ComponentActivity() {
     // reaches STARTED -- a class-body property initializer is the documented-safe
     // place for that, same as registering an ActivityResultLauncher directly would be.
     private val documentPicker = DocumentPicker(this)
+
+    // Same unconditional-during-init requirement as documentPicker above --
+    // CameraCapture's own registerForActivityResult call needs to run before
+    // this activity reaches STARTED.
+    private val cameraCapture = CameraCapture(this)
 
     // The Android half of the raw-key-dispatch bridge App's onRawKeyHandlerChange
     // registers into (see ViewerScreen's doc on that parameter for the full
@@ -66,6 +72,7 @@ class MainActivity : ComponentActivity() {
                 importer = importer,
                 pickPdf = documentPicker::pickPdf,
                 pickImages = documentPicker::pickImages,
+                captureImages = cameraCapture::captureImages,
                 pedalMapping = pedalMapping,
                 onPedalMappingChange = { updated ->
                     pedalMapping = updated
