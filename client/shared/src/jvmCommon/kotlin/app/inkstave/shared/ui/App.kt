@@ -67,6 +67,12 @@ private sealed interface Screen {
  *   (`CaptureSessionSender`, `ROADMAP.md` M4) -- Android-only, like [captureImages]; `null`
  *   (desktop's default) means [LibraryScreen] never offers it, since desktop has no capture flow
  *   of its own to send a session *from* in the first place.
+ * @param acquireMulticastLock held for as long as [PairingScreen] needs to *receive* mDNS
+ *   multicast traffic -- Android's WiFi stack drops incoming multicast packets by default for
+ *   battery reasons unless something holds a `WifiManager.MulticastLock`, a purely Android
+ *   concept desktop has no equivalent of (`null`, desktop's default, means "nothing to hold").
+ *   A real-device test is what caught this needing to exist at all: without it, discovery would
+ *   plausibly advertise fine but silently never receive anything back.
  */
 @Composable
 fun App(
@@ -82,6 +88,7 @@ fun App(
     localIdentity: DeviceIdentity,
     peerTrustStore: PeerTrustStore,
     sendCaptureSession: (suspend (peer: TrustedPeer, scoreTitle: String, photos: List<ByteArray>) -> CaptureSessionSendOutcome)? = null,
+    acquireMulticastLock: (() -> AutoCloseable)? = null,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
 
@@ -120,6 +127,7 @@ fun App(
                     localIdentity = localIdentity,
                     trustStore = peerTrustStore,
                     onBack = { screen = Screen.Library },
+                    acquireMulticastLock = acquireMulticastLock,
                 )
         }
     }

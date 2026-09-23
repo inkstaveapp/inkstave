@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- M4 sync (docs/sync-protocol.md): all four are "normal" protection-level permissions
+         (granted automatically at install, no runtime request needed, unlike CAMERA below),
+         but they were missing entirely until a real-device test caught it: without INTERNET,
+         no socket networking (JmDNS discovery, the TLS pairing/capture-session transport) works
+         on Android at all, and JmDnsSyncDiscovery.create() crashed outright on a real device with
+         a NullPointerException inside JmDNS's own network-interface enumeration
+         (javax.jmdns.impl.NetworkTopologyDiscoveryImpl), consistent with it querying connectivity
+         state it had no permission to see. CHANGE_WIFI_MULTICAST_STATE specifically: Android's
+         WiFi stack drops incoming multicast packets by default for battery reasons unless the app
+         holds a WifiManager.MulticastLock, which itself requires this permission; without it,
+         mDNS discovery could plausibly stop failing loudly (this crash) and start failing
+         silently (advertises fine, never receives anything) instead, which is just as real a bug
+         and worth heading off now that it's found. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
     <!-- M4 camera capture (CaptureActivity.kt): requested at runtime (CameraCapture.kt),
          this manifest entry is what makes the runtime request possible at all. -->
     <uses-permission android:name="android.permission.CAMERA" />

@@ -475,12 +475,39 @@ remap flow," not a hardcoded guess.
       delivery" — not yet designed in detail), and the
       metadata-confirmation UI noted above. Both real, separate follow-up
       work.
-      **Only ever verified on one machine's loopback interface** — a real
-      phone and a real desktop on a real LAN has not been exercised, for
-      either the transport primitives or this end-to-end composition; that
-      is real, necessary follow-up validation for the repo owner, the same
-      standing caveat M3's pedal hardware and M4's camera preview already
-      have.
+      **First real-device pass (repo owner connected an actual phone over
+      ADB and drove it live)** found three real bugs no amount of loopback
+      -on-one-machine testing could have caught, all now fixed: (1)
+      `PairingScreen`'s `DisposableEffect` called `JmDnsSyncDiscovery.create()`
+      synchronously on the composing/UI thread — fine on desktop, an
+      immediate `NetworkOnMainThreadException` crash on Android, since
+      JmDNS's own setup does a blocking DNS lookup; fixed by moving that
+      whole setup onto a background thread, with careful dispose-race
+      handling (the screen can be left before setup finishes). (2)
+      `AndroidManifest.xml` never declared `INTERNET`/
+      `ACCESS_NETWORK_STATE`/`ACCESS_WIFI_STATE`/
+      `CHANGE_WIFI_MULTICAST_STATE` at all — without them, no socket
+      networking works on Android full stop, and JmDNS's own network
+      -interface enumeration crashed with a `NullPointerException`
+      consistent with querying connectivity state it had no permission to
+      see; all four are "normal" protection-level permissions (no runtime
+      prompt needed), added now. (3) nothing ever acquired a
+      `WifiManager.MulticastLock` — Android drops incoming multicast
+      packets by default for battery reasons, so even with the permission
+      fix, discovery would plausibly have advertised fine and silently
+      never received anything; added as an optional `App`/`PairingScreen`
+      parameter (`null`/no-op on desktop, a real lock on Android via
+      `MainActivity`), reference-counted so `PairingScreen`'s standing hold
+      and a concurrent capture-session send don't release each other's
+      early. All three verified fixed live on the real device (the
+      pairing screen now renders correctly instead of crashing) before
+      being committed. **Still not exercised**: an actual completed
+      pairing handshake and capture-session transfer between two real
+      devices on a real LAN — the crashes blocking that from even starting
+      are now fixed, but the handshake itself hasn't been run end to end
+      on real hardware yet. That, plus real pedal hardware (M3) and real
+      camera preview/capture behavior (M4), remain for the repo owner to
+      exercise.
 - [x] Python pipeline: perspective correction, dewarping, crop to page
       bounds, contrast/B&W cleanup, aspect-ratio normalization.
       `processing-service/src/inkstave_processing/pipeline/` -- see

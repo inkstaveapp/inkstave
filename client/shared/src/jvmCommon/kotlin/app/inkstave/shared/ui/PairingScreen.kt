@@ -33,6 +33,7 @@ import app.inkstave.shared.sync.PairingServer
 import app.inkstave.shared.sync.PairingSession
 import app.inkstave.shared.sync.PeerTrustStore
 import app.inkstave.shared.sync.SyncDeviceListener
+import app.inkstave.shared.sync.SyncDiscovery
 import app.inkstave.shared.sync.TrustedPeer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,6 +67,7 @@ fun PairingScreen(
     localIdentity: DeviceIdentity,
     trustStore: PeerTrustStore,
     onBack: () -> Unit,
+    acquireMulticastLock: (() -> AutoCloseable)? = null,
 ) {
     var discoveredDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
     var trustedPeers by remember { mutableStateOf(trustStore.list()) }
@@ -78,47 +80,89 @@ fun PairingScreen(
     // docs/sync-protocol.md's "discovery of an unpaired device only offers 'pair with this
     // device'" -- that offer itself shouldn't stand indefinitely in the background either.
     DisposableEffect(Unit) {
-        val discovery = JmDnsSyncDiscovery.create()
-        val server = PairingServer(settingsDirectory)
-        discovery.advertise(localIdentity, server.boundPort, setOf(DeviceRole.CAPTURE, DeviceRole.PROCESSING))
-        discovery.browse(
-            object : SyncDeviceListener {
-                override fun onDeviceFound(device: DiscoveredDevice) {
-                    if (device.deviceId == localIdentity.deviceId) return
-                    discoveredDevices = discoveredDevices.filterNot { it.deviceId == device.deviceId } + device
-                }
-
-                override fun onDeviceLost(deviceId: String) {
-                    discoveredDevices = discoveredDevices.filterNot { it.deviceId == deviceId }
-                }
-            },
-        )
-
         val acceptLoopRunning = AtomicBoolean(true)
-        val acceptThread =
+        val disposed = AtomicBoolean(false)
+        var discovery: SyncDiscovery? = null
+        var server: PairingServer? = null
+        var acceptThread: Thread? = null
+        // Android only (desktop's default null means "nothing to hold") -- must be acquired
+        // before JmDnsSyncDiscovery.create()'s advertise/browse calls have anything meaningful
+        // to do, and released on dispose alongside discovery/server. See App's own doc on this
+        // parameter for why it exists at all: a real-device test caught that without it, mDNS
+        // replies would plausibly be silently dropped by Android's WiFi stack.
+        var multicastLock: AutoCloseable? = null
+
+        // Everything below -- JmDnsSyncDiscovery.create() especially -- does blocking I/O
+        // (JmDNS's own setup does a DNS lookup via InetAddress.getLocalHost(); PairingServer's
+        // construction touches the on-disk TLS keystore). A DisposableEffect body runs
+        // synchronously on the composing/UI thread and can't use withContext the way a suspend
+        // call site (e.g. LibraryScreen's sendCaptureSession wiring) already correctly does --
+        // calling JmDnsSyncDiscovery.create() directly here crashed on real Android hardware with
+        // NetworkOnMainThreadException, a bug only real-device testing could catch (every prior
+        // test of this exercised it from a plain JVM test, which has no such restriction). Running
+        // all of this setup on its own background thread instead fixes it.
+        val setupThread =
             Thread {
-                while (acceptLoopRunning.get()) {
-                    val outcome =
-                        try {
-                            server.acceptOne(localIdentity)
-                        } catch (e: IOException) {
-                            // server.close() (below, on dispose) unblocks the in-progress accept()
-                            // call with exactly this exception -- the expected way this loop ends,
-                            // not a failure to report.
-                            break
+                val createdLock = acquireMulticastLock?.invoke()
+                val createdDiscovery = JmDnsSyncDiscovery.create()
+                val createdServer = PairingServer(settingsDirectory)
+                createdDiscovery.advertise(localIdentity, createdServer.boundPort, setOf(DeviceRole.CAPTURE, DeviceRole.PROCESSING))
+                createdDiscovery.browse(
+                    object : SyncDeviceListener {
+                        override fun onDeviceFound(device: DiscoveredDevice) {
+                            if (device.deviceId == localIdentity.deviceId) return
+                            discoveredDevices = discoveredDevices.filterNot { it.deviceId == device.deviceId } + device
                         }
-                    pendingConfirmation = outcome as? PairingOutcome.AwaitingConfirmation
+
+                        override fun onDeviceLost(deviceId: String) {
+                            discoveredDevices = discoveredDevices.filterNot { it.deviceId == deviceId }
+                        }
+                    },
+                )
+
+                if (disposed.get()) {
+                    // The screen was already left by the time setup finished -- onDispose ran
+                    // against still-null discovery/server/multicastLock, so close what was just
+                    // opened here instead of leaking it.
+                    createdServer.close()
+                    createdDiscovery.close()
+                    createdLock?.close()
+                    return@Thread
                 }
+                discovery = createdDiscovery
+                server = createdServer
+                multicastLock = createdLock
+                acceptThread =
+                    Thread {
+                        while (acceptLoopRunning.get()) {
+                            val outcome =
+                                try {
+                                    createdServer.acceptOne(localIdentity)
+                                } catch (e: IOException) {
+                                    // server.close() (below, on dispose) unblocks the in-progress
+                                    // accept() call with exactly this exception -- the expected
+                                    // way this loop ends, not a failure to report.
+                                    break
+                                }
+                            pendingConfirmation = outcome as? PairingOutcome.AwaitingConfirmation
+                        }
+                    }.apply {
+                        isDaemon = true
+                        start()
+                    }
             }.apply {
                 isDaemon = true
                 start()
             }
 
         onDispose {
+            disposed.set(true)
             acceptLoopRunning.set(false)
-            server.close()
-            discovery.close()
-            acceptThread.interrupt()
+            server?.close()
+            discovery?.close()
+            multicastLock?.close()
+            acceptThread?.interrupt()
+            setupThread.interrupt()
         }
     }
 

@@ -1,5 +1,7 @@
 package app.inkstave.android
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -93,8 +95,9 @@ class MainActivity : ComponentActivity() {
                 localIdentity = localIdentity,
                 peerTrustStore = peerTrustStore,
                 sendCaptureSession = { peer, scoreTitle, photos ->
-                    sendCaptureSession(syncSettingsDirectory, peerTrustStore, peer, scoreTitle, photos)
+                    sendCaptureSession(applicationContext, syncSettingsDirectory, peerTrustStore, peer, scoreTitle, photos)
                 },
+                acquireMulticastLock = { acquireMulticastLock(applicationContext) },
             )
         }
     }
@@ -126,25 +129,50 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
+ * Acquires an Android `WifiManager.MulticastLock` for as long as the returned [AutoCloseable]
+ * is held open. Android's WiFi stack drops incoming multicast packets by default (a battery
+ * -saving default that predates mDNS-based app features being common) unless something holds
+ * this lock -- without it, [JmDnsSyncDiscovery] can advertise fine but never actually receive a
+ * reply, a real bug only caught by testing discovery on real Android hardware (a plain JVM test
+ * has no such restriction to hit in the first place). Reference-counted
+ * ([WifiManager.MulticastLock.setReferenceCounted]) so [PairingScreen]'s standing lock and a
+ * concurrent [sendCaptureSession] call's own short-lived one don't release each other's hold
+ * early.
+ */
+private fun acquireMulticastLock(context: Context): AutoCloseable {
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    val lock = wifiManager.createMulticastLock("inkstave-sync")
+    lock.setReferenceCounted(true)
+    lock.acquire()
+    return AutoCloseable { lock.release() }
+}
+
+/**
  * [App]'s `sendCaptureSession` bridge: a fresh, short-lived [JmDnsSyncDiscovery] scoped to this
  * one send (not the whole app's lifetime -- there's no standing UI screen here to keep a browse
  * live for, unlike [PairingScreen]), composed with [LanSyncTransport]/[CaptureSessionSender], the
  * exact same primitives the receiving desktop side ([Main.kt]'s `startSyncListener`) uses on its
  * end. A top-level function, not a method on [MainActivity], since it needs no `Activity` state of
  * its own -- everything it needs is passed in.
+ *
+ * Also holds [acquireMulticastLock] for this call's duration -- see that function's own doc for
+ * why discovery needs it to receive anything at all on Android.
  */
 private suspend fun sendCaptureSession(
+    context: Context,
     syncSettingsDirectory: File,
     trustStore: PeerTrustStore,
     peer: TrustedPeer,
     scoreTitle: String,
     photos: List<ByteArray>,
 ): CaptureSessionSendOutcome {
+    val multicastLock = acquireMulticastLock(context)
     val discovery = JmDnsSyncDiscovery.create()
     return try {
         val sender = CaptureSessionSender(discovery, LanSyncTransport(syncSettingsDirectory, trustStore))
         sender.send(peer, scoreTitle, photos)
     } finally {
         discovery.close()
+        multicastLock.close()
     }
 }
