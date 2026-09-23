@@ -11,6 +11,20 @@ record that gets persisted into `pages/<page-id>.meta.json`
 (`docs/format-spec.md`) for reproducibility — a page can be reprocessed from
 its raw capture later if an algorithm improves, without re-capturing.
 
+**Implementation note (as built, M4's first slice,
+`processing-service/src/inkstave_processing/pipeline/`):** stages 1–3 below
+(detection, perspective correction, dewarping, cropping) are implemented as
+one combined operation (`pipeline/geometry.py`), not three chained ones —
+see that module's docstring for why chaining a flat perspective transform
+before dewarping would actually be wrong (it discards the boundary
+curvature dewarping needs before dewarping ever sees it). The dewarping
+model itself is honestly scoped to smooth boundary curl/bowing (a page not
+lying flat) via a boundary-fitted mesh (a Coons patch) — it does not correct
+local creases or folds, which don't show up on the page's own boundary.
+Stages 4–5 (contrast, normalization) match this doc as originally written.
+
+
+
 1. **Page detection & perspective correction**
    Detect the sheet-music page's quadrilateral boundary against its
    background (contour detection on edges/color difference) and apply a

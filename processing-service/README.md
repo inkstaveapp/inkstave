@@ -4,12 +4,47 @@ Python image-processing and OCR pipeline that runs on the desktop side
 (ADR-0002, `../docs/decisions/0002-processing-engine-language.md`). See
 `../docs/image-pipeline.md` for what it does.
 
-**M0 scaffolding only:** the actual pipeline (perspective correction,
-dewarping, crop, contrast/B&W cleanup, OCR) isn't implemented yet -- that's
-M4 (`../ROADMAP.md`), owned by the `image-pipeline` agent. What exists so
-far is the service shell: a FastAPI app with a `/health` endpoint, bound to
-loopback only, with its own test suite and strict typing wired up. Not
+**M4, first slice:** the image-cleanup pipeline itself
+(`src/inkstave_processing/pipeline/`) is implemented and tested -- page
+detection, geometric correction (perspective + dewarping + cropping,
+combined -- see `pipeline/geometry.py`'s module doc for why), contrast/B&W
+cleanup, and aspect-ratio normalization. **Not yet built:** camera capture,
+LAN sync, OCR, and a real HTTP endpoint wiring the pipeline into the
+service (the existing FastAPI app still only has `/health` -- see
+`ROADMAP.md`'s M4 entry for exactly what's done vs. still ahead). Not
 intended to run on Android; the desktop client is its only caller.
+
+## The pipeline (`src/inkstave_processing/pipeline/`)
+
+```
+pipeline/
+├── cv_backend.py   Every OpenCV call, behind fully-typed wrappers (see its
+│                   module doc -- opencv-python-headless ships real .pyi
+│                   stubs, but not precise ones; this is where that gets
+│                   narrowed down to this package's own exact types)
+├── geometry.py     Page detection + perspective correction + dewarping +
+│                   cropping, combined into one operation (see its module
+│                   doc for why chaining them separately would be wrong,
+│                   and its honest scope: smooth boundary curl, not folds/
+│                   creases)
+├── contrast.py     Tunable CLAHE/adaptive-threshold blend (docs/image-pipeline.md's
+│                   "faint pencil marks stay legible" requirement)
+├── normalize.py    Aspect-ratio classification + padding + resize
+├── types.py        Shared result types -- shaped to drop straight into
+│                   inkstave_format's PageMeta/PageProcessing fields
+└── run.py          process_page(): runs all of the above in order
+```
+
+No real camera-captured test photos exist yet (that flow isn't built). Tests
+run against synthetic images generated in `tests/pipeline/fixtures.py`
+(a flat "page" with a border, horizontal rule lines, and vertical
+"barlines", composed onto a background and optionally bowed with a known
+displacement field) -- the same spirit as the client side generating
+synthetic PDFs with PDFBox rather than needing real files.
+
+```
+.venv/bin/python -m pytest tests/pipeline -q
+```
 
 ## Setup
 

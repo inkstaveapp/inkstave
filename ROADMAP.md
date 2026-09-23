@@ -279,12 +279,49 @@ remap flow," not a hardcoded guess.
 - [ ] LAN device discovery and pairing (see `docs/sync-protocol.md`).
 - [ ] Live transfer of captured photos from phone to desktop
       (capture session).
-- [ ] Python pipeline: perspective correction, dewarping, crop to page
+- [x] Python pipeline: perspective correction, dewarping, crop to page
       bounds, contrast/B&W cleanup, aspect-ratio normalization.
+      `processing-service/src/inkstave_processing/pipeline/` -- see
+      `processing-service/README.md`'s "The pipeline" section and
+      `docs/image-pipeline.md`'s implementation note for the architecture
+      (perspective correction + dewarping + cropping combined into one
+      operation, not three chained stages, and why).
+      **Dewarping's honest scope:** a boundary-fitted mesh (Coons patch)
+      correcting smooth boundary curl/bowing -- the common "book won't lie
+      flat" case -- not local creases or folds, which a page's boundary
+      doesn't capture. A real, deliberate scope-down, not an oversight; see
+      `pipeline/geometry.py`'s module doc.
+      **Verified, for real:** 19/19 tests pass (`pytest tests/pipeline`),
+      `ruff check .` and `mypy --strict` both clean with **zero
+      `# type: ignore`** anywhere (opencv-python-headless 4.14.0.94's
+      bundled stubs turned out precise enough that explicit `.astype()`
+      narrowing at each `cv2` call site was sufficient -- see
+      `pipeline/cv_backend.py`'s module doc). Tested against synthetic
+      images only (no real camera-captured photos exist yet -- that flow
+      isn't built); the dewarping test specifically applies a known
+      sinusoidal boundary displacement and confirms a previously-curved
+      reference line comes out straight within a defined tolerance, not
+      just "the code runs." **A real bug was caught and fixed during this
+      pass, not just written correctly the first time:** the edge-tracing
+      helper that splits a detected contour into its four boundary curves
+      originally always walked "forward" through the contour's point
+      order, which silently grabs the long way around the loop (through
+      the other two corners) whenever OpenCV's contour winding happens to
+      go the other direction — fixed to always take the geometrically
+      shorter path between two corners, which is correct regardless of
+      winding direction; this measurably improved dewarping accuracy in
+      the test that caught it. New dependencies: `opencv-python-headless`
+      (pinned to the latest 4.x line, not the newly-released 5.x, as a
+      deliberate stability call), `numpy` (both Apache-2.0/BSD-3-Clause,
+      `NOTICE.md`), and `pillow` (MIT-CMU, dev/test-only — synthetic test
+      fixtures, not a pipeline runtime dependency).
 - [ ] OCR pass for title/subtitle/composer/arranger/other metadata, surfaced
       to the user for confirmation/edit before committing to the library.
 - [ ] Processed pages + metadata written back into a `.smpk`, synced back to
-      the originating device(s).
+      the originating device(s). Not started — the real `POST /process-page`
+      HTTP endpoint connecting this pipeline to the desktop client is also
+      deliberately deferred to land alongside OCR, so its request/response
+      shape doesn't need revising twice.
 
 ## M5 — Multi-part scores
 

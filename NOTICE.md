@@ -56,6 +56,9 @@ detekt release exists.
 | FastAPI | \>=0.115 (0.120.x installed) | MIT | Local HTTP API, loopback-only (`docs/image-pipeline.md`). |
 | uvicorn | \>=0.32 (0.38.x installed) | BSD-3-Clause | ASGI server FastAPI runs on. |
 | httpx | \>=0.27 (dev/test only) | BSD-3-Clause | Used transitively by FastAPI's `TestClient`. |
+| opencv-python-headless | ==4.14.0.94 | Apache-2.0 | Image pipeline (`inkstave_processing.pipeline`, `docs/image-pipeline.md`). Pinned to the latest 4.x line rather than the newly-released 5.x, deliberately -- see `processing-service/README.md`. `-headless` specifically: no GUI/Qt/X11 dependency needed for a service with no display. |
+| numpy | \>=2.1 (2.5.x installed) | BSD-3-Clause (+ small 0BSD/MIT/Zlib/CC0-1.0-licensed portions, per pip's own license metadata -- all permissive) | Image pipeline array operations. |
+| pillow | \>=11 (dev/test only) | MIT-CMU | Synthetic test-fixture image generation only (`tests/pipeline/fixtures.py`) -- not a pipeline runtime dependency. |
 
 `inkstave-processing` also depends on `inkstave-format` (below), installed
 locally/editable from `format/python` -- not a third-party dependency.
