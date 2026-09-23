@@ -11,6 +11,9 @@ import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.pedal.PedalKeyMapping
+import app.inkstave.shared.sync.DeviceIdentity
+import app.inkstave.shared.sync.PeerTrustStore
+import java.io.File
 
 /** Which screen [App] is currently showing. Library is always the start screen. */
 private sealed interface Screen {
@@ -21,6 +24,8 @@ private sealed interface Screen {
     ) : Screen
 
     data object PedalSettings : Screen
+
+    data object Pairing : Screen
 }
 
 /**
@@ -47,6 +52,13 @@ private sealed interface Screen {
  *   register into while they're the active screen -- see [ViewerScreen]'s own doc on this parameter for why
  *   it exists. Desktop's default no-op is correct: `Main.kt` never calls the registered handler, since
  *   desktop delivers key events to the focused composable directly.
+ * @param syncSettingsDirectory where this device's sync identity/trust store lives (`ROADMAP.md` M4,
+ *   `app.inkstave.shared.sync`) -- the platform entry point decides the actual path (`DesktopSettingsPaths`
+ *   on desktop, `filesDir/sync` on Android), the same division of responsibility `pedalMapping`'s storage uses.
+ * @param localIdentity this device's own persistent sync identity (`DeviceIdentityProvisioning`), provisioned
+ *   once by the platform entry point on first run and passed down rather than re-derived here, so it stays
+ *   stable across recompositions without this composable needing to know how provisioning works.
+ * @param peerTrustStore the paired-device trust store [PairingScreen] reads/writes.
  */
 @Composable
 fun App(
@@ -58,6 +70,9 @@ fun App(
     pedalMapping: PedalKeyMapping,
     onPedalMappingChange: (PedalKeyMapping) -> Unit,
     onRawKeyHandlerChange: (((Key) -> Boolean)?) -> Unit = {},
+    syncSettingsDirectory: File,
+    localIdentity: DeviceIdentity,
+    peerTrustStore: PeerTrustStore,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
 
@@ -72,6 +87,7 @@ fun App(
                     captureImages = captureImages,
                     onOpenScore = { filePath -> screen = Screen.Viewer(filePath) },
                     onOpenPedalSettings = { screen = Screen.PedalSettings },
+                    onOpenPairing = { screen = Screen.Pairing },
                 )
             is Screen.Viewer ->
                 ViewerScreen(
@@ -86,6 +102,13 @@ fun App(
                     onMappingChange = onPedalMappingChange,
                     onBack = { screen = Screen.Library },
                     onRawKeyHandlerChange = onRawKeyHandlerChange,
+                )
+            is Screen.Pairing ->
+                PairingScreen(
+                    settingsDirectory = syncSettingsDirectory,
+                    localIdentity = localIdentity,
+                    trustStore = peerTrustStore,
+                    onBack = { screen = Screen.Library },
                 )
         }
     }

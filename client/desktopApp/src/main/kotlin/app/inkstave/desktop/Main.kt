@@ -12,6 +12,8 @@ import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.library.DesktopLibraryPaths
 import app.inkstave.shared.pedal.DesktopSettingsPaths
 import app.inkstave.shared.pedal.PedalSettingsStore
+import app.inkstave.shared.sync.PeerTrustStore
+import app.inkstave.shared.sync.getOrCreateDeviceIdentity
 import app.inkstave.shared.ui.App
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,6 +29,9 @@ import kotlinx.coroutines.withContext
  * left at its default no-op: desktop delivers key events to the focused
  * composable directly ([App]'s own doc on that parameter), so there's
  * nothing for this entry point to bridge the way `MainActivity` does.
+ * `getOrCreateDeviceIdentity` (M4, `app.inkstave.shared.sync`) is called once here, not per
+ * recomposition, the same one-time-provisioning-then-pass-down pattern `pedalSettingsStore.load()`
+ * already uses.
  */
 fun main() =
     application {
@@ -34,6 +39,9 @@ fun main() =
         val index = LibraryIndexRepository(driver)
         val importer = LibraryImporter(DesktopLibraryPaths.libraryDirectory(), index)
         val pedalSettingsStore = PedalSettingsStore(DesktopSettingsPaths.pedalSettingsFile())
+        val syncSettingsDirectory = DesktopSettingsPaths.syncSettingsDirectory()
+        val localIdentity = getOrCreateDeviceIdentity(syncSettingsDirectory)
+        val peerTrustStore = PeerTrustStore(DesktopSettingsPaths.peerTrustStoreFile())
 
         Window(onCloseRequest = ::exitApplication, title = "Inkstave") {
             var pedalMapping by remember { mutableStateOf(pedalSettingsStore.load()) }
@@ -48,6 +56,9 @@ fun main() =
                     pedalMapping = updated
                     pedalSettingsStore.save(updated)
                 },
+                syncSettingsDirectory = syncSettingsDirectory,
+                localIdentity = localIdentity,
+                peerTrustStore = peerTrustStore,
             )
         }
     }

@@ -66,6 +66,7 @@ fun LibraryScreen(
     captureImages: (suspend () -> List<PickedFile>)? = null,
     onOpenScore: (filePath: String) -> Unit,
     onOpenPedalSettings: () -> Unit,
+    onOpenPairing: () -> Unit,
 ) {
     var scores by remember { mutableStateOf(index.listAll()) }
     var importing by remember { mutableStateOf(false) }
@@ -134,6 +135,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("Inkstave") },
                 actions = {
+                    TextButton(onClick = onOpenPairing, modifier = Modifier.testTag(TestTags.PAIRING_ENTRY)) {
+                        Text("Sync Pairing")
+                    }
                     TextButton(onClick = onOpenPedalSettings, modifier = Modifier.testTag(TestTags.PEDAL_SETTINGS_ENTRY)) {
                         Text("Pedal Settings")
                     }
@@ -227,6 +231,14 @@ internal object TestTags {
     const val PEDAL_SETTINGS_RESET = "pedal-settings-reset"
     const val PEDAL_SETTINGS_CAPTURE_PROMPT = "pedal-settings-capture-prompt"
     const val PEDAL_SETTINGS_BACK = "pedal-settings-back"
+    const val PAIRING_ENTRY = "library-pairing-entry"
+    const val PAIRING_CONFIRMATION = "pairing-confirmation"
+    const val PAIRING_SHORT_CODE = "pairing-short-code"
+    const val PAIRING_CONFIRM = "pairing-confirm"
+    const val PAIRING_REJECT = "pairing-reject"
+    const val PAIRING_DEVICE_LIST = "pairing-device-list"
+    const val PAIRING_TRUSTED_LIST = "pairing-trusted-list"
+    const val PAIRING_BACK = "pairing-back"
 
     fun scoreListItem(scoreId: String) = "library-score-item-$scoreId"
 
@@ -245,4 +257,8 @@ internal object TestTags {
         action: PedalAction,
         key: Key,
     ) = "pedal-settings-chip-remove-${action.name.lowercase()}-${key.keyCode}"
+
+    fun pairingDeviceButton(deviceId: String) = "pairing-device-$deviceId"
+
+    fun pairingRevokeButton(deviceId: String) = "pairing-revoke-$deviceId"
 }

@@ -15,6 +15,8 @@ import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.index.AndroidSqlDriverFactory
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.pedal.PedalSettingsStore
+import app.inkstave.shared.sync.PeerTrustStore
+import app.inkstave.shared.sync.getOrCreateDeviceIdentity
 import app.inkstave.shared.ui.App
 import java.io.File
 import android.view.KeyEvent as NativeKeyEvent
@@ -63,6 +65,9 @@ class MainActivity : ComponentActivity() {
         val libraryDirectory = File(filesDir, "library").apply { mkdirs() }
         val importer = LibraryImporter(libraryDirectory, index)
         val pedalSettingsStore = PedalSettingsStore(File(filesDir, "pedal-settings.json"))
+        val syncSettingsDirectory = File(filesDir, "sync")
+        val localIdentity = getOrCreateDeviceIdentity(syncSettingsDirectory)
+        val peerTrustStore = PeerTrustStore(File(syncSettingsDirectory, "trusted-peers.json"))
 
         setContent {
             var pedalMapping by remember { mutableStateOf(pedalSettingsStore.load()) }
@@ -79,6 +84,9 @@ class MainActivity : ComponentActivity() {
                     pedalSettingsStore.save(updated)
                 },
                 onRawKeyHandlerChange = { handler -> activeRawKeyHandler = handler },
+                syncSettingsDirectory = syncSettingsDirectory,
+                localIdentity = localIdentity,
+                peerTrustStore = peerTrustStore,
             )
         }
     }
