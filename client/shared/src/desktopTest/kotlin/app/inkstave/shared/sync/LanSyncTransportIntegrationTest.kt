@@ -95,7 +95,7 @@ class LanSyncTransportIntegrationTest {
     }
 
     @Test
-    fun `an unpaired sender's connection is rejected by TLS itself, before any message is received`() {
+    fun `an unpaired sender can never successfully exchange a message, even though its own connect() call can locally succeed`() {
         val receiverIdentity = getOrCreateDeviceIdentity(receiverDirectory)
         val receiverTrustStore = PeerTrustStore(java.io.File(receiverDirectory, "trusted-peers.json"))
         // Deliberately do NOT add the sender's fingerprint -- this is the "never paired" case.
@@ -121,8 +121,21 @@ class LanSyncTransportIntegrationTest {
         val transport = LanSyncTransport(senderDirectory, senderTrustStore)
         val peer = TrustedPeer(receiverIdentity.deviceId, "Desktop", realFingerprintOf(receiverDirectory))
 
+        // Deliberately NOT `transport.connect(peer, ...).close()`, and deliberately not just one
+        // `send()` either: TLS 1.3's client-authentication flow means the *sender's* `connect()`
+        // -- and even a single small `send()` right after it -- can complete successfully from the
+        // sender's own point of view even though the *receiver* already rejected its certificate:
+        // a small enough write fits in the OS socket send buffer and returns before the receiver's
+        // already-sent TLS close alert is ever processed locally, the same ordinary TCP behavior
+        // that makes "did the peer actually receive this" fundamentally unknowable from a write
+        // succeeding alone. A `receive()` (read) doesn't have that ambiguity -- there is, and never
+        // will be, anything more to read from a connection the receiver already tore down, so it
+        // reliably surfaces what `serverFailed` below already separately proves happened.
         assertFailsWith<IOException> {
-            transport.connect(peer, "127.0.0.1", server.boundPort).close()
+            transport.connect(peer, "127.0.0.1", server.boundPort).use { connection ->
+                connection.send(CaptureSessionMessage.SessionStart("irrelevant-session", "Irrelevant"))
+                connection.receive()
+            }
         }
 
         serverThread.join(SERVER_JOIN_TIMEOUT_MILLIS)

@@ -2,9 +2,38 @@ package app.inkstave.shared.sync
 
 import java.io.File
 import java.io.IOException
+import java.security.GeneralSecurityException
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
+
+/**
+ * Runs [block] (a TLS handshake step that can trigger [PinnedFingerprintTrustManager]) and
+ * rethrows any [GeneralSecurityException] as an [IOException] -- **a real bug found on real
+ * hardware, not a defensive nicety**: `X509TrustManager.checkClientTrusted`/`checkServerTrusted`
+ * are declared to throw `CertificateException` (a [GeneralSecurityException], *not* an
+ * [IOException]), and for TLS 1.3 client-certificate rejection specifically, the JDK's own SSL
+ * engine does not wrap that exception before it escapes `startHandshake()` -- confirmed directly
+ * via `-Djavax.net.debug=ssl`, not assumed: the real stack trace shows
+ * [PinnedFingerprintTrustManager.checkClientTrusted]'s `CertificateException` propagating straight
+ * out of `SSLSocketImpl.startHandshake()`. Every caller here, including the real production
+ * capture-session listener (`Main.kt`'s `startSyncListener`), only ever catches [IOException]
+ * around a `startHandshake()` call -- without this, a single unpaired device's connection attempt
+ * would throw an uncaught, unexpected-type exception straight through that listener's `while(true)`
+ * loop, silently killing sync for the rest of the app's run, not just failing that one connection
+ * the way the loop's own comment already says it's designed to.
+ *
+ * `internal`, not `private`: [PairingSession]'s handshake calls use [TrustAnyPeerCertificate],
+ * which never throws today, so they're not *currently* exposed to this -- but they're the same
+ * shape of call, and wrapping them the same way is cheap insurance against this exact bug coming
+ * back the moment that trust manager's behavior ever changes.
+ */
+internal inline fun <T> rethrowingSecurityExceptionsAsIO(block: () -> T): T =
+    try {
+        block()
+    } catch (e: GeneralSecurityException) {
+        throw IOException("TLS handshake failed: ${e.message}", e)
+    }
 
 /** [SyncConnection] over a plain TLS socket, both directions using [CaptureSessionWire]'s framing. */
 internal class LanSyncConnection(
@@ -42,7 +71,7 @@ class LanSyncTransport(
     ): SyncConnection {
         val sslContext = deviceIdentitySslContext(settingsDirectory, PinnedFingerprintTrustManager(trustStore))
         val socket = sslContext.socketFactory.createSocket(host, port) as SSLSocket
-        socket.startHandshake()
+        rethrowingSecurityExceptionsAsIO { socket.startHandshake() }
         val actualFingerprint = CertificateFingerprint.sha256(socket.session.peerCertificates.first() as X509Certificate)
         if (actualFingerprint != peer.certificateFingerprintSha256) {
             socket.close()
@@ -85,11 +114,17 @@ class SyncServer(
      * should advertise this device as reachable on). */
     val boundPort: Int get() = serverSocket.localPort
 
-    /** Blocks until one already-paired peer connects, then returns the authenticated connection. Callers loop
-     * this on a background thread/coroutine while willing to receive a capture session. */
+    /**
+     * Blocks until one already-paired peer connects, then returns the authenticated connection.
+     * Callers loop this on a background thread/coroutine while willing to receive a capture
+     * session. Always throws [IOException] (never a raw [GeneralSecurityException] -- see
+     * [rethrowingSecurityExceptionsAsIO]) for a rejected handshake, so callers that (correctly)
+     * only catch [IOException] around this call don't get an uncaught exception instead of the
+     * "one bad connection, keep listening" behavior they intend.
+     */
     fun acceptOne(): SyncConnection {
         val socket = serverSocket.accept() as SSLSocket
-        socket.startHandshake()
+        rethrowingSecurityExceptionsAsIO { socket.startHandshake() }
         return LanSyncConnection(socket)
     }
 

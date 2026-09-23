@@ -10,6 +10,7 @@ import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.SecureRandom
+import java.security.spec.ECGenParameterSpec
 import java.util.Date
 import java.util.UUID
 import javax.net.ssl.KeyManagerFactory
@@ -63,13 +64,33 @@ private fun provisionNewIdentity(settingsDirectory: File): AndroidIdentityMetada
     val spec =
         KeyGenParameterSpec
             .Builder(KEYSTORE_ALIAS, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
-            .setDigests(KeyProperties.DIGEST_SHA256)
+            // EC (P-256/secp256r1), not RSA -- matching DeviceIdentityProvisioning.desktop.kt's
+            // own keytool invocation. This was RSA originally; a real cross-device pairing attempt
+            // on real hardware failed the TLS handshake with a BoringSSL "RSA routines ...
+            // internal error", consistent with this KeyGenParameterSpec never declaring
+            // .setSignaturePaddings(...) -- AndroidKeyStore cryptographically enforces that a key
+            // is only usable for the exact signature scheme(s) its spec authorized, and without
+            // one declared, whatever RSA padding TLS 1.3 actually negotiated for CertificateVerify
+            // (RSA-PSS by default) wasn't necessarily one this key was ever authorized to use.
+            // EC signing in TLS has no equivalent multi-padding-scheme ambiguity to get wrong.
+            //
+            // DIGEST_NONE is required alongside DIGEST_SHA256, also found on real hardware:
+            // Conscrypt/BoringSSL computes the TLS handshake transcript hash itself and asks
+            // AndroidKeyStore to perform a *raw* ECDSA sign over that already-computed digest --
+            // it never asks the key to hash-and-sign a message the way DIGEST_SHA256 alone
+            // authorizes. Without DIGEST_NONE, every handshake needing this key to sign (both as
+            // the connecting side's CertificateVerify and the accepting side's own) failed with
+            // `InvalidKeyException: ... KeyStoreException: Incompatible digest`, confirmed via a
+            // real phone-to-desktop pairing attempt's logcat stack trace through
+            // ConscryptEngineSocket$SSLInputStream -> PairingSession.
+            .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_NONE)
+            .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setCertificateSubject(X500Principal("CN=$deviceId"))
             .setCertificateSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
             .setCertificateNotBefore(notBefore)
             .setCertificateNotAfter(notAfter)
             .build()
-    KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore").apply {
+    KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
         initialize(spec)
         generateKeyPair()
     }
