@@ -15,7 +15,12 @@ import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.index.AndroidSqlDriverFactory
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.pedal.PedalSettingsStore
+import app.inkstave.shared.sync.CaptureSessionSendOutcome
+import app.inkstave.shared.sync.CaptureSessionSender
+import app.inkstave.shared.sync.JmDnsSyncDiscovery
+import app.inkstave.shared.sync.LanSyncTransport
 import app.inkstave.shared.sync.PeerTrustStore
+import app.inkstave.shared.sync.TrustedPeer
 import app.inkstave.shared.sync.getOrCreateDeviceIdentity
 import app.inkstave.shared.ui.App
 import java.io.File
@@ -87,6 +92,9 @@ class MainActivity : ComponentActivity() {
                 syncSettingsDirectory = syncSettingsDirectory,
                 localIdentity = localIdentity,
                 peerTrustStore = peerTrustStore,
+                sendCaptureSession = { peer, scoreTitle, photos ->
+                    sendCaptureSession(syncSettingsDirectory, peerTrustStore, peer, scoreTitle, photos)
+                },
             )
         }
     }
@@ -114,5 +122,29 @@ class MainActivity : ComponentActivity() {
             if (handled) return true
         }
         return super.dispatchKeyEvent(event)
+    }
+}
+
+/**
+ * [App]'s `sendCaptureSession` bridge: a fresh, short-lived [JmDnsSyncDiscovery] scoped to this
+ * one send (not the whole app's lifetime -- there's no standing UI screen here to keep a browse
+ * live for, unlike [PairingScreen]), composed with [LanSyncTransport]/[CaptureSessionSender], the
+ * exact same primitives the receiving desktop side ([Main.kt]'s `startSyncListener`) uses on its
+ * end. A top-level function, not a method on [MainActivity], since it needs no `Activity` state of
+ * its own -- everything it needs is passed in.
+ */
+private suspend fun sendCaptureSession(
+    syncSettingsDirectory: File,
+    trustStore: PeerTrustStore,
+    peer: TrustedPeer,
+    scoreTitle: String,
+    photos: List<ByteArray>,
+): CaptureSessionSendOutcome {
+    val discovery = JmDnsSyncDiscovery.create()
+    return try {
+        val sender = CaptureSessionSender(discovery, LanSyncTransport(syncSettingsDirectory, trustStore))
+        sender.send(peer, scoreTitle, photos)
+    } finally {
+        discovery.close()
     }
 }

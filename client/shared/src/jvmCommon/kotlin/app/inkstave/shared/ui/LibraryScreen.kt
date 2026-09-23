@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -35,6 +36,9 @@ import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.index.ScoreSummary
 import app.inkstave.shared.pedal.PedalAction
+import app.inkstave.shared.sync.CaptureSessionSendOutcome
+import app.inkstave.shared.sync.PeerTrustStore
+import app.inkstave.shared.sync.TrustedPeer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,10 +55,20 @@ import kotlinx.coroutines.withContext
  *
  * [captureImages] (`ROADMAP.md` M4) adds a third "Capture photos" import
  * option alongside PDF/images when non-`null` (Android only, as of M4 --
- * `null` on desktop, which has no in-app camera flow). Its result feeds
- * [importer]'s existing [LibraryImporter.importImages] path -- the exact
- * same code M1's "import a set of images" already uses, whether the images
- * came from the system picker or the camera.
+ * `null` on desktop, which has no in-app camera flow). Its result normally
+ * feeds [importer]'s existing [LibraryImporter.importImages] path -- the
+ * exact same code M1's "import a set of images" already uses, whether the
+ * images came from the system picker or the camera -- **unless** at least
+ * one peer is paired ([trustStore]) and [sendCaptureSession] is non-`null`
+ * (Android only, same reasoning as [captureImages]), in which case the user
+ * is asked whether to send the batch to that peer instead
+ * (`CaptureSessionSender`, `docs/sync-protocol.md`) or still import it
+ * locally -- local import is always offered and is the safe default if the
+ * send fails or the dialog is dismissed, per this integration's "local
+ * first, sync later" scope decision (never lose a just-captured batch).
+ * Picking a specific peer when more than one is paired isn't built yet --
+ * this always offers [trustStore]'s first entry; real future work if that
+ * becomes a real need, not attempted in this pass.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +78,8 @@ fun LibraryScreen(
     pickPdf: suspend () -> PickedFile?,
     pickImages: suspend () -> List<PickedFile>,
     captureImages: (suspend () -> List<PickedFile>)? = null,
+    trustStore: PeerTrustStore? = null,
+    sendCaptureSession: (suspend (peer: TrustedPeer, scoreTitle: String, photos: List<ByteArray>) -> CaptureSessionSendOutcome)? = null,
     onOpenScore: (filePath: String) -> Unit,
     onOpenPedalSettings: () -> Unit,
     onOpenPairing: () -> Unit,
@@ -71,6 +87,8 @@ fun LibraryScreen(
     var scores by remember { mutableStateOf(index.listAll()) }
     var importing by remember { mutableStateOf(false) }
     var importMenuExpanded by remember { mutableStateOf(false) }
+    var pendingCaptureChoice by remember { mutableStateOf<List<PickedFile>?>(null) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     // Picks up scores imported elsewhere (e.g. a future sync receive) while this
@@ -123,12 +141,82 @@ fun LibraryScreen(
     // filename-derived guess those use. Correcting the title is exactly what M4's still-pending
     // OCR-confirmation UI (ROADMAP.md) will eventually help with; M4's camera-capture slice on
     // its own doesn't have a better signal to offer yet.
-    fun importCaptureAction(capture: suspend () -> List<PickedFile>) =
+    fun importLocally(captured: List<PickedFile>) =
         runImport {
-            val captured = capture()
-            if (captured.isEmpty()) return@runImport
             importer.importImages(title = "Untitled", imageFiles = captured.map { it.bytes })
         }
+
+    fun importCaptureAction(capture: suspend () -> List<PickedFile>) {
+        importMenuExpanded = false
+        scope.launch {
+            val captured = withContext(Dispatchers.IO) { capture() }
+            if (captured.isEmpty()) return@launch
+            if (sendCaptureSession != null && trustStore != null && trustStore.list().isNotEmpty()) {
+                // Ask -- see this function's doc for why local import is always the fallback, never
+                // a silently-lost batch.
+                pendingCaptureChoice = captured
+            } else {
+                importLocally(captured)
+            }
+        }
+    }
+
+    fun sendPendingCapture(peer: TrustedPeer) {
+        val captured = pendingCaptureChoice ?: return
+        pendingCaptureChoice = null
+        val send = sendCaptureSession ?: return
+        scope.launch {
+            statusMessage = "Sending to ${peer.displayName}..."
+            val outcome = withContext(Dispatchers.IO) { send(peer, "Untitled", captured.map { it.bytes }) }
+            when (outcome) {
+                is CaptureSessionSendOutcome.Sent -> statusMessage = "Sent to ${peer.displayName}"
+                is CaptureSessionSendOutcome.PeerNotFound ->
+                    statusMessage = "${peer.displayName} wasn't found on the network -- is it running? Importing locally instead."
+                is CaptureSessionSendOutcome.Failed ->
+                    statusMessage = "Couldn't send to ${peer.displayName} (${outcome.reason}) -- importing locally instead."
+            }
+            // Both failure outcomes above fall back to local import, same "never lose a just
+            // -captured batch" reasoning as dismissing the dialog outright -- only a confirmed Sent
+            // skips it, since the photos already have a home on the peer's device.
+            if (outcome !is CaptureSessionSendOutcome.Sent) importLocally(captured)
+        }
+    }
+
+    fun importPendingCaptureLocally() {
+        val captured = pendingCaptureChoice ?: return
+        pendingCaptureChoice = null
+        importLocally(captured)
+    }
+
+    pendingCaptureChoice?.let { captured ->
+        val peer = trustStore?.list()?.firstOrNull()
+        AlertDialog(
+            onDismissRequest = ::importPendingCaptureLocally,
+            title = { Text("Send captured pages?") },
+            text = {
+                Text(
+                    if (peer != null) {
+                        "Send ${captured.size} captured page(s) to ${peer.displayName}, or import them on this device?"
+                    } else {
+                        "Import ${captured.size} captured page(s) on this device?"
+                    },
+                )
+            },
+            confirmButton = {
+                if (peer != null) {
+                    TextButton(onClick = { sendPendingCapture(peer) }, modifier = Modifier.testTag(TestTags.CAPTURE_SEND_TO_DESKTOP)) {
+                        Text("Send to ${peer.displayName}")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = ::importPendingCaptureLocally,
+                    modifier = Modifier.testTag(TestTags.CAPTURE_IMPORT_LOCALLY),
+                ) { Text("Import locally") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -174,19 +262,22 @@ fun LibraryScreen(
             }
         },
     ) { padding ->
-        if (scores.isEmpty()) {
-            EmptyLibrary(modifier = Modifier.fillMaxSize().padding(padding))
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).testTag(TestTags.SCORE_LIST)) {
-                items(scores, key = ScoreSummary::id) { score ->
-                    ListItem(
-                        headlineContent = { Text(score.title) },
-                        supportingContent = { score.composer?.let { Text(it) } },
-                        modifier =
-                            Modifier
-                                .clickable { onOpenScore(score.filePath) }
-                                .testTag(TestTags.scoreListItem(score.id)),
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            statusMessage?.let { Text(it, modifier = Modifier.padding(12.dp).testTag(TestTags.CAPTURE_STATUS_MESSAGE)) }
+            if (scores.isEmpty()) {
+                EmptyLibrary(modifier = Modifier.fillMaxSize())
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize().testTag(TestTags.SCORE_LIST)) {
+                    items(scores, key = ScoreSummary::id) { score ->
+                        ListItem(
+                            headlineContent = { Text(score.title) },
+                            supportingContent = { score.composer?.let { Text(it) } },
+                            modifier =
+                                Modifier
+                                    .clickable { onOpenScore(score.filePath) }
+                                    .testTag(TestTags.scoreListItem(score.id)),
+                        )
+                    }
                 }
             }
         }
@@ -215,6 +306,9 @@ internal object TestTags {
     const val IMPORT_PDF_MENU_ITEM = "library-menu-import-pdf"
     const val IMPORT_IMAGES_MENU_ITEM = "library-menu-import-images"
     const val CAPTURE_PHOTOS_MENU_ITEM = "library-menu-capture-photos"
+    const val CAPTURE_SEND_TO_DESKTOP = "library-capture-send-to-desktop"
+    const val CAPTURE_IMPORT_LOCALLY = "library-capture-import-locally"
+    const val CAPTURE_STATUS_MESSAGE = "library-capture-status-message"
     const val EMPTY_LIBRARY = "library-empty-state"
     const val SCORE_LIST = "library-score-list"
     const val VIEWER_PAGE_INDICATOR = "viewer-page-indicator"

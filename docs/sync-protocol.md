@@ -101,12 +101,25 @@ operation.
 - **Capture session:** the mobile app opens a session tied to a target
   score (new or existing) by sending a `SessionStart` message (session ID +
   score title); each captured photo is sent as its own `Photo` message
-  (session ID, sequence index, raw bytes) as it's taken, so the desktop can
-  show live progress and the processing service can process photos as they
-  arrive rather than waiting for the whole batch; a `SessionEnd` message
-  closes it out (`CaptureSessionMessage`, `docs/image-pipeline.md`'s
-  `/process-page` endpoint is the natural next hop for each received
-  `Photo`, not yet wired to it — see `ROADMAP.md`'s M4 entry).
+  (session ID, sequence index, raw bytes), so the desktop can process
+  photos individually as they arrive rather than only once the whole batch
+  is present; a `SessionEnd` message closes it out (`CaptureSessionMessage`,
+  `docs/image-pipeline.md`'s `/process-page` endpoint is the natural next
+  hop for each received `Photo`, not yet wired to it — see `ROADMAP.md`'s
+  M4 entry).
+  **Implemented (M4, `CaptureSessionSender`/`CaptureSessionReceiver`,
+  `client/shared/src/.../sync/`):** the sender finds the peer's current
+  address via a fresh discovery lookup (pairing only pins a fingerprint,
+  never a live address) and sends the messages above over
+  `LanSyncTransport`; the receiver reads them into a `.smpk` via the same
+  local-import path M1 already uses. One honest gap from this section's
+  phrasing above: the *client* currently sends a capture session's photos
+  as one batch once the user finishes capturing (`CaptureActivity`'s
+  "Done"), not truly live, one `Photo` message per shutter press during
+  capture — the wire protocol and receiver already support that (nothing
+  about `Photo`'s shape assumes batching), but `CaptureActivity` isn't
+  wired to stream mid-capture yet. Real, low-effort follow-up work, not
+  attempted in this pass.
 - **Processed result delivery:** once the desktop has assembled the
   finished `.smpk` (or an update to an existing one), it sends it back to
   the originating device(s) as a normal sync payload, not a special case of

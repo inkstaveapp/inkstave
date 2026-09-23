@@ -11,8 +11,10 @@ import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.pedal.PedalKeyMapping
+import app.inkstave.shared.sync.CaptureSessionSendOutcome
 import app.inkstave.shared.sync.DeviceIdentity
 import app.inkstave.shared.sync.PeerTrustStore
+import app.inkstave.shared.sync.TrustedPeer
 import java.io.File
 
 /** Which screen [App] is currently showing. Library is always the start screen. */
@@ -58,7 +60,13 @@ private sealed interface Screen {
  * @param localIdentity this device's own persistent sync identity (`DeviceIdentityProvisioning`), provisioned
  *   once by the platform entry point on first run and passed down rather than re-derived here, so it stays
  *   stable across recompositions without this composable needing to know how provisioning works.
- * @param peerTrustStore the paired-device trust store [PairingScreen] reads/writes.
+ * @param peerTrustStore the paired-device trust store [PairingScreen] reads/writes, and
+ *   [LibraryScreen] reads to decide whether "send to desktop" is even offered for a finished
+ *   capture session.
+ * @param sendCaptureSession sends a finished capture session to a paired peer
+ *   (`CaptureSessionSender`, `ROADMAP.md` M4) -- Android-only, like [captureImages]; `null`
+ *   (desktop's default) means [LibraryScreen] never offers it, since desktop has no capture flow
+ *   of its own to send a session *from* in the first place.
  */
 @Composable
 fun App(
@@ -73,6 +81,7 @@ fun App(
     syncSettingsDirectory: File,
     localIdentity: DeviceIdentity,
     peerTrustStore: PeerTrustStore,
+    sendCaptureSession: (suspend (peer: TrustedPeer, scoreTitle: String, photos: List<ByteArray>) -> CaptureSessionSendOutcome)? = null,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
 
@@ -85,6 +94,8 @@ fun App(
                     pickPdf = pickPdf,
                     pickImages = pickImages,
                     captureImages = captureImages,
+                    trustStore = peerTrustStore,
+                    sendCaptureSession = sendCaptureSession,
                     onOpenScore = { filePath -> screen = Screen.Viewer(filePath) },
                     onOpenPedalSettings = { screen = Screen.PedalSettings },
                     onOpenPairing = { screen = Screen.Pairing },

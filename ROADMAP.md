@@ -366,19 +366,48 @@ remap flow," not a hardcoded guess.
       in-order delivery — plus the negative case (an unpaired sender's
       connection is rejected by TLS itself, the test that caught the
       `needClientAuth` bug above).
-      **Not done, deliberately:** wiring a live camera-capture session in
-      `CaptureActivity`/`LibraryScreen` to actually *send* its photos
-      through this transport to a paired desktop, instead of only
-      importing them locally (M4's camera-capture slice) — real follow-up
-      work once this transport existed to build it on, not attempted in
-      this pass to keep transport correctness as the priority (per this
-      pass's own scope: "protocol correctness wins" over UI integration if
-      both couldn't be done well). Also not done: the receiving
-      (desktop) side actually forwarding a received `Photo` to
-      `POST /process-page` and assembling the result into a `.smpk` — see
-      the note on that endpoint below, unchanged by this pass.
+      **Now wired end to end (follow-up pass, same commit series):**
+      `LibraryScreen`'s capture flow, when at least one desktop peer is
+      paired, asks whether to send the finished batch to that peer
+      (`CaptureSessionSender`: a fresh, per-send `JmDnsSyncDiscovery`
+      lookup for the peer's *current* address — pairing only ever pinned a
+      fingerprint, never a live IP — then `LanSyncTransport`) or import it
+      locally as before; local import is always the fallback if the peer
+      isn't currently discoverable or the send otherwise fails, so a
+      capture session's photos are never silently lost. On the desktop
+      side, `Main.kt` now starts a persistent `SyncServer` +
+      `_inkstave`/`processing`-role advertisement for the whole time the
+      app is open (deliberately *not* scoped to `PairingScreen` being
+      open, the way pairing itself is — receiving an already-paired
+      session should just work whenever the app happens to be running),
+      accepting sessions in a background loop and importing each one via
+      `CaptureSessionReceiver` — the exact same `LibraryImporter.importImages`
+      path local import already uses. A session received over sync is
+      deliberately treated exactly like a local import for now.
+      **Verified, for real:** `CaptureSessionSyncEndToEndTest` drives the
+      real send path (real per-send discovery, not the receiver's own
+      advertisement reused) against the real receive path (a real
+      `SyncServer` + `CaptureSessionReceiver`), asserting the imported
+      score is indexed and its pages readable back via `SmpkReader` in
+      order — the actual headline flow, not just the transport primitives
+      underneath it (already covered by `LanSyncTransportIntegrationTest`
+      above). A second test confirms a peer that isn't currently
+      discoverable reports `PeerNotFound` cleanly rather than hanging or
+      crashing. `:shared:test`, `ktlintCheck`, `:desktopApp:build`, and
+      `:androidApp:assembleDebug` all pass; `:shared:desktopTest` is
+      unaffected beyond the two new passing tests (still only the same 5
+      pre-existing `AppUiTest`/`PedalSettingsUiTest` Skiko failures noted
+      above, nothing new).
+      **Still not done, deliberately:** the receiving (desktop) side
+      forwarding a received photo to `POST /process-page` and assembling
+      a *cleaned* result into the `.smpk` — a received session is imported
+      as-is, unprocessed, same as any local import; and syncing a
+      processed result back to the originating phone. Both are real,
+      separate follow-up work once desktop-side pipeline integration
+      exists, not attempted here.
       **Only ever verified on one machine's loopback interface** — a real
-      phone and a real desktop on a real LAN has not been exercised; that
+      phone and a real desktop on a real LAN has not been exercised, for
+      either the transport primitives or this end-to-end composition; that
       is real, necessary follow-up validation for the repo owner, the same
       standing caveat M3's pedal hardware and M4's camera preview already
       have.
