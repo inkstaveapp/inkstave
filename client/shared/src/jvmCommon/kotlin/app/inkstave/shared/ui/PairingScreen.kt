@@ -111,7 +111,20 @@ fun PairingScreen(
                     object : SyncDeviceListener {
                         override fun onDeviceFound(device: DiscoveredDevice) {
                             if (device.deviceId == localIdentity.deviceId) return
-                            discoveredDevices = discoveredDevices.filterNot { it.deviceId == device.deviceId } + device
+                            // Keyed by (deviceId, port), not deviceId alone: the *same* physical
+                            // device can legitimately advertise two live, differently-ported
+                            // services at once under one deviceId -- e.g. this very screen's own
+                            // ephemeral PairingServer (roles=capture,processing, trust-any-cert,
+                            // meant for exactly this handshake) alongside a desktop's permanent
+                            // Main.kt SyncServer (roles=processing, pinned-trust only, rejects any
+                            // not-yet-paired device). Deduping by deviceId alone let whichever
+                            // record resolved last silently overwrite the other, so a tap on the
+                            // only visible row could connect to the wrong listener entirely --
+                            // found via a real phone pairing attempt whose desktop-side log showed
+                            // the connection landing on the permanent SyncServer's thread, rejected
+                            // with "not a paired peer," while a PairingServer was in fact also live.
+                            discoveredDevices =
+                                discoveredDevices.filterNot { it.deviceId == device.deviceId && it.port == device.port } + device
                         }
 
                         override fun onDeviceLost(deviceId: String) {
@@ -225,9 +238,14 @@ fun PairingScreen(
                 Text("Looking for devices on the same network...", style = MaterialTheme.typography.bodySmall)
             } else {
                 LazyColumn(modifier = Modifier.testTag(TestTags.PAIRING_DEVICE_LIST)) {
-                    items(discoveredDevices, key = DiscoveredDevice::deviceId) { device ->
+                    items(discoveredDevices, key = { "${it.deviceId}:${it.port}" }) { device ->
                         ListItem(
                             headlineContent = { Text(device.displayName) },
+                            // Surfaces which port this entry actually is -- the same deviceId can
+                            // now appear as more than one row (see onDeviceFound's doc), and
+                            // without this the two would be visually indistinguishable, making it
+                            // a coin flip which one a tap actually pairs with.
+                            supportingContent = { Text("roles: ${device.roles.sorted().joinToString(", ")}") },
                             trailingContent = {
                                 TextButton(
                                     onClick = { startPairingWith(device) },
