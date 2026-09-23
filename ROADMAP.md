@@ -398,13 +398,83 @@ remap flow," not a hardcoded guess.
       unaffected beyond the two new passing tests (still only the same 5
       pre-existing `AppUiTest`/`PedalSettingsUiTest` Skiko failures noted
       above, nothing new).
-      **Still not done, deliberately:** the receiving (desktop) side
-      forwarding a received photo to `POST /process-page` and assembling
-      a *cleaned* result into the `.smpk` — a received session is imported
-      as-is, unprocessed, same as any local import; and syncing a
-      processed result back to the originating phone. Both are real,
-      separate follow-up work once desktop-side pipeline integration
-      exists, not attempted here.
+      **Now wired to the real cleanup/OCR pipeline (second follow-up pass,
+      same commit series):** a received capture session's photos are run
+      through `processing-service`'s real `POST /process-page` before
+      being written into the library — `app.inkstave.shared.processing`
+      (desktop-only, `java.net.http.HttpClient` — no new dependency):
+      `ProcessingServiceClient` (the HTTP call + response parsing) and
+      `ProcessingServiceLauncher` (a **dev-checkout-only** best-effort
+      launcher — checks `/health` first, since the service might already
+      be running; if not, looks for a `processing-service/.venv` a few
+      directory levels around the app's own working directory and starts
+      it via `ProcessBuilder`; see that class's own doc for exactly why
+      this is *not* a real release-packaging story and what M7 will
+      actually need instead). `CaptureSessionReceiver.receiveAndImport`
+      now takes a `ProcessingServiceClient?` and degrades gracefully, the
+      same resilience pattern this milestone already established for "peer
+      not discoverable": `null`, an unreachable service, or *any* photo in
+      the session failing to process all fall back to the exact same raw
+      `LibraryImporter.importImages` path used before this pass — never a
+      partial mix of processed and raw pages in one score (see that
+      object's own doc for why an all-or-nothing policy per session was
+      chosen over per-photo fallback). `LibraryImporter.importProcessedPages`/
+      `ImportPipeline.buildProcessedScore` write the real per-page
+      `PageMeta.processing`/`PageMeta.ocr` this produces, and source type
+      `"camera-capture"` (`docs/format-spec.md`'s `manifest.json.source.type`
+      enum) — its first real use.
+      **OCR candidates land in page metadata only, never the manifest** —
+      the score's title stays whatever the sender specified at
+      `SessionStart`, per `docs/image-pipeline.md`'s hard "always
+      proposals" rule; a metadata-confirmation UI letting a user
+      review/accept/edit OCR suggestions before they'd ever touch the
+      manifest is real, valuable, separate future work, not attempted
+      here — this pass's job was getting pages back *visually* cleaned,
+      which doesn't need that UI to deliver real value on its own.
+      **Verified against a real running `processing-service`, not a
+      mock** — the one part of the whole M4 arc that had never actually
+      exercised Kotlin calling real Python before this pass (every prior
+      `processing-service` test drove it from Python via `TestClient`;
+      every prior sync test proved Kotlin-to-Kotlin over a real socket).
+      `ProcessingServiceClientTest` launches the real service (via the
+      same production `ProcessingServiceLauncher`, not a separate test
+      -only launcher) and calls it for real: a synthetic "page photo"
+      (light rectangle on a darker background, enough contrast for real
+      contour-based page detection) comes back with real dimensions, a
+      real decodable PNG, the real `"coons-boundary-v1"` dewarp model
+      version, and a real Tesseract version string; a genuinely blank
+      photo (no edges at all) gets the real documented 422, not a 500.
+      `CaptureSessionProcessingIntegrationTest` proves the same thing one
+      level up — a session run through the real service ends up with real
+      (non-null) `processing`/`ocr` metadata once read back via
+      `SmpkReader` — plus the fallback paths (service unreachable; no
+      client configured at all) with no real service involved, since
+      those don't need one to prove. Real pass/fail signal, this pass:
+      `:shared:test`, `ktlintCheck`, `:desktopApp:build`,
+      `:androidApp:assembleDebug` all pass; `:shared:desktopTest` — 103
+      tests, 5 failed, and all 5 are the same pre-existing, already
+      -documented Skiko `AppUiTest`/`PedalSettingsUiTest` failures, not
+      grown by this pass — every pre-existing test plus all 7 new
+      processing tests (4 in `ProcessingServiceClientTest`, 3 in
+      `CaptureSessionProcessingIntegrationTest`) pass clean.
+      **A real bug caught and fixed during this pass, not shipped:**
+      `java.net.http.HttpClient`'s default HTTP/2-preferred negotiation
+      sent an `Upgrade: h2c` cleartext-upgrade attempt on every new
+      connection, which uvicorn's H11 implementation logged as
+      "Unsupported upgrade request" and did not handle cleanly alongside a
+      request body — `POST /process-page` calls were silently arriving
+      with an *empty* body server-side (`cv2.error: ... !buf.empty()`,
+      a real 500, not a simulated one), exactly the kind of failure this
+      pass's own real-service integration tests exist to catch rather
+      than a mocked test ever could. Fixed by pinning the client to
+      `HttpClient.Version.HTTP_1_1` — this service is, and only ever will
+      be, plain HTTP/1.1 uvicorn, so there was never a reason to attempt
+      HTTP/2 negotiation in the first place.
+      **Still not done, deliberately:** syncing a processed result back to
+      the originating phone (`docs/sync-protocol.md`'s "Processed result
+      delivery" — not yet designed in detail), and the
+      metadata-confirmation UI noted above. Both real, separate follow-up
+      work.
       **Only ever verified on one machine's loopback interface** — a real
       phone and a real desktop on a real LAN has not been exercised, for
       either the transport primitives or this end-to-end composition; that

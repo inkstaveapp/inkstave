@@ -4,16 +4,28 @@ Python image-processing and OCR pipeline that runs on the desktop side
 (ADR-0002, `../docs/decisions/0002-processing-engine-language.md`). See
 `../docs/image-pipeline.md` for what it does.
 
-**M4, slices 1-2:** the full image-cleanup + OCR pipeline
-(`src/inkstave_processing/pipeline/`) is implemented and tested -- page
-detection, geometric correction (perspective + dewarping + cropping,
-combined -- see `pipeline/geometry.py`'s module doc for why), contrast/B&W
-cleanup, aspect-ratio normalization, and OCR metadata extraction
-(`pipeline/ocr.py`) -- exposed end to end via a real `POST /process-page`
-endpoint. **Not yet built:** camera capture, LAN sync, and wiring the
-*client* to actually call this endpoint (see `ROADMAP.md`'s M4 entry for
-exactly what's done vs. still ahead). Not intended to run on Android; the
-desktop client is its only caller.
+**M4:** the full image-cleanup + OCR pipeline (`src/inkstave_processing/pipeline/`)
+is implemented and tested -- page detection, geometric correction
+(perspective + dewarping + cropping, combined -- see `pipeline/geometry.py`'s
+module doc for why), contrast/B&W cleanup, aspect-ratio normalization, and
+OCR metadata extraction (`pipeline/ocr.py`) -- exposed end to end via a real
+`POST /process-page` endpoint. The desktop client now actually calls this
+for real, for every photo in a received capture session
+(`client/shared/.../processing/ProcessingServiceClient.kt`,
+`.../sync/CaptureSessionReceiver.kt`) -- see `ROADMAP.md`'s M4 entry for the
+full picture, including its graceful-fallback-to-raw-import policy when this
+service isn't reachable. Not intended to run on Android; the desktop client
+is its only caller.
+
+Nothing here needs to change to be called this way -- the client is a
+consumer of the contract this service already exposed, not something this
+service had to be modified for. One practical consequence worth knowing:
+whoever runs the desktop client expects to be able to find this directory
+with its `.venv` already set up nearby (a few directory levels around
+wherever the desktop app's own working directory is) -- see
+`ProcessingServiceLauncher`'s own doc in `client/README.md` for exactly what
+it looks for and why that's a dev-checkout-only mechanism, not yet a real
+release-packaging story (`ROADMAP.md` M7).
 
 **System prerequisite: Tesseract OCR.** Unlike every other dependency this
 service uses, Tesseract is a **system binary**, not something `pip install`

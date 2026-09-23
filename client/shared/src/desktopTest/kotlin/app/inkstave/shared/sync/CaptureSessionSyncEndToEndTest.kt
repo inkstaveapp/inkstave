@@ -108,7 +108,11 @@ class CaptureSessionSyncEndToEndTest {
             Thread {
                 try {
                     server.acceptOne().use { connection ->
-                        importedManifestId = CaptureSessionReceiver.receiveAndImport(connection, importer).id
+                        // null: this test proves the transport/import composition (this file's own
+                        // scope, unchanged by the processing-pipeline slice), not the pipeline
+                        // integration itself -- see CaptureSessionProcessingIntegrationTest for that.
+                        importedManifestId =
+                            CaptureSessionReceiver.receiveAndImport(connection, importer, processingClient = null).manifest.id
                     }
                 } catch (t: Throwable) {
                     receiverFailure = t

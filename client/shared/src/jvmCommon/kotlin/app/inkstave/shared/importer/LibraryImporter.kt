@@ -46,6 +46,26 @@ class LibraryImporter(
         return importDecodedPages(title, "image-import", originalFilename, pages)
     }
 
+    /**
+     * Imports a set of already-*processed* pages (`docs/image-pipeline.md`'s cleanup/OCR
+     * pipeline has already run on each one -- see [ProcessedPage]) as a `"camera-capture"`
+     * -sourced score. The M4 counterpart to [importImages]: same write-then-index contract, but
+     * each page's `PageMeta.processing`/`PageMeta.ocr` carry the pipeline's real data instead of
+     * `null`. The only caller is a received capture session that a paired desktop's
+     * `processing-service` was reachable for (`CaptureSessionReceiver`) -- when it isn't, that
+     * caller falls back to [importImages] with the original, unprocessed photo bytes instead of
+     * calling this.
+     */
+    fun importProcessedPages(
+        title: String,
+        processedPages: List<ProcessedPage>,
+        originalFilename: String? = null,
+    ): Manifest {
+        val sourceDetails = originalFilename?.let { mapOf("originalFilename" to it) } ?: emptyMap()
+        val imported = ImportPipeline.buildProcessedScore(title, sourceDetails, processedPages)
+        return writeAndIndex(imported)
+    }
+
     private fun importDecodedPages(
         title: String,
         sourceType: String,
@@ -54,11 +74,16 @@ class LibraryImporter(
     ): Manifest {
         val sourceDetails = originalFilename?.let { mapOf("originalFilename" to it) } ?: emptyMap()
         val imported = ImportPipeline.buildScore(title, sourceType, sourceDetails, pages)
+        return writeAndIndex(imported)
+    }
 
+    /** The write-then-index tail [importPdf]/[importImages]/[importProcessedPages] all share --
+     * see this class's own doc for why that pairing always happens together, never one without
+     * the other. */
+    private fun writeAndIndex(imported: ImportedScore): Manifest {
         val destination = File(libraryDirectory, "${imported.manifest.id}.smpk")
         SmpkWriter.write(destination, imported.manifest, imported.part, imported.pages)
         index.upsertFromManifest(imported.manifest, destination.absolutePath, Instant.now().toString())
-
         return imported.manifest
     }
 }

@@ -45,10 +45,7 @@ object ImportPipeline {
         decodedPages: List<DecodedPage>,
     ): ImportedScore {
         require(decodedPages.isNotEmpty()) { "a score needs at least one page" }
-
-        val now = Instant.now().toString()
         val pageIds = decodedPages.indices.map { index -> "page-${index + 1}" }
-
         val pages =
             decodedPages.zip(pageIds).map { (decoded, pageId) ->
                 SmpkPage(
@@ -65,10 +62,59 @@ object ImportPipeline {
                         ),
                 )
             }
+        val (manifest, part) = manifestAndPart(title, sourceType, sourceDetails, pageIds)
+        return ImportedScore(manifest, part, pages)
+    }
 
+    /**
+     * The M4 counterpart to [buildScore]: pages that have already been run through
+     * `processing-service`'s cleanup/OCR pipeline (`ProcessedPage`), rather than raw decoded ones
+     * -- each page's [PageMeta.processing]/[PageMeta.ocr] carry the pipeline's real data instead of
+     * `null`, and [PageMeta.aspectRatioClass] is whatever the pipeline actually normalized it to,
+     * not the hardcoded `"custom"` [buildScore] uses for as-imported pages. Source type is always
+     * `"camera-capture"` (`docs/format-spec.md`'s `manifest.json.source.type` enum) -- the only
+     * caller of this is a received capture session (`CaptureSessionReceiver`), never a PDF/image
+     * import, which is exactly what distinguishes this from [buildScore].
+     */
+    fun buildProcessedScore(
+        title: String,
+        sourceDetails: Map<String, String>,
+        processedPages: List<ProcessedPage>,
+    ): ImportedScore {
+        require(processedPages.isNotEmpty()) { "a score needs at least one page" }
+        val pageIds = processedPages.indices.map { index -> "page-${index + 1}" }
+        val pages =
+            processedPages.zip(pageIds).map { (processed, pageId) ->
+                SmpkPage(
+                    id = pageId,
+                    pngBytes = processed.pngBytes,
+                    meta =
+                        PageMeta(
+                            id = pageId,
+                            width = processed.width,
+                            height = processed.height,
+                            aspectRatioClass = processed.aspectRatioClass,
+                            processing = processed.processing,
+                            ocr = processed.ocr,
+                        ),
+                )
+            }
+        val (manifest, part) = manifestAndPart(title, "camera-capture", sourceDetails, pageIds)
+        return ImportedScore(manifest, part, pages)
+    }
+
+    /** The `Manifest`/`Part` construction [buildScore]/[buildProcessedScore] share -- everything
+     * except how each page's [PageMeta] itself gets built, which is the one real difference
+     * between "just imported" and "already processed" pages. */
+    private fun manifestAndPart(
+        title: String,
+        sourceType: String,
+        sourceDetails: Map<String, String>,
+        pageIds: List<String>,
+    ): Pair<Manifest, Part> {
+        val now = Instant.now().toString()
         val partId = "part-1"
         val part = Part(id = partId, name = "Full Score", pageOrder = pageIds)
-
         val manifest =
             Manifest(
                 formatVersion = 1,
@@ -83,7 +129,6 @@ object ImportPipeline {
                         details = buildJsonObject { sourceDetails.forEach { (key, value) -> put(key, value) } },
                     ),
             )
-
-        return ImportedScore(manifest, part, pages)
+        return manifest to part
     }
 }

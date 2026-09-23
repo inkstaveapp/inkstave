@@ -12,6 +12,9 @@ import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.library.DesktopLibraryPaths
 import app.inkstave.shared.pedal.DesktopSettingsPaths
 import app.inkstave.shared.pedal.PedalSettingsStore
+import app.inkstave.shared.processing.ProcessingServiceClient
+import app.inkstave.shared.processing.ProcessingServiceLauncher
+import app.inkstave.shared.sync.CaptureSessionImportOutcome
 import app.inkstave.shared.sync.CaptureSessionReceiver
 import app.inkstave.shared.sync.DeviceRole
 import app.inkstave.shared.sync.JmDnsSyncDiscovery
@@ -43,7 +46,11 @@ import java.io.IOException
  * own advertise/accept loop, which is deliberately scoped to only while that screen is open (a
  * *pairing* invitation shouldn't stand indefinitely), receiving a capture session someone already
  * paired with this device is exactly the kind of thing that should just work whenever the desktop
- * app happens to be open, not only when the user has navigated to a specific screen for it.
+ * app happens to be open, not only when the user has navigated to a specific screen for it. Also
+ * fires off [ProcessingServiceLauncher.ensureRunningInBackground] once at startup (a dev-checkout
+ * -only mechanism -- see that class's own doc) so `processing-service` is already running, or at
+ * least attempted, by the time the first capture session actually arrives, rather than only being
+ * discovered missing at that point.
  */
 fun main() =
     application {
@@ -54,7 +61,9 @@ fun main() =
         val syncSettingsDirectory = DesktopSettingsPaths.syncSettingsDirectory()
         val localIdentity = getOrCreateDeviceIdentity(syncSettingsDirectory)
         val peerTrustStore = PeerTrustStore(DesktopSettingsPaths.peerTrustStoreFile())
-        startSyncListener(syncSettingsDirectory, peerTrustStore, importer)
+        val processingServiceClient = ProcessingServiceClient()
+        ProcessingServiceLauncher.ensureRunningInBackground(processingServiceClient)
+        startSyncListener(syncSettingsDirectory, peerTrustStore, importer, processingServiceClient)
 
         Window(onCloseRequest = ::exitApplication, title = "Inkstave") {
             var pedalMapping by remember { mutableStateOf(pedalSettingsStore.load()) }
@@ -81,9 +90,11 @@ fun main() =
  * TLS itself before this function's own code ever runs) and advertises it via JmDNS as a
  * [DeviceRole.PROCESSING] device, then accepts capture sessions in a loop on a background daemon
  * thread for as long as the process runs -- each one handed to [CaptureSessionReceiver], which
- * imports it via [importer] the exact same way M1's local image import already does (see that
- * object's own doc for exactly what's deliberately *not* done yet: running received photos
- * through `processing-service`'s cleanup/OCR pipeline, and syncing a processed result back).
+ * runs it through [processingClient] when that's reachable (falling back to raw import otherwise,
+ * per that object's own doc on exactly when and why) and imports the result via [importer].
+ * [CaptureSessionImportOutcome] is logged either way, so which path a given session actually took
+ * is visible in this process's own output, not silently indistinguishable. Still not done:
+ * syncing a processed result back to the originating phone (`ROADMAP.md`'s M4 entry).
  *
  * No explicit shutdown hook: this is a single-window desktop app whose process exits directly on
  * window close ([exitApplication]), and the server socket/JmDNS registration are OS-cleaned-up
@@ -94,6 +105,7 @@ private fun startSyncListener(
     syncSettingsDirectory: java.io.File,
     trustStore: PeerTrustStore,
     importer: LibraryImporter,
+    processingClient: ProcessingServiceClient,
 ) {
     val identity = getOrCreateDeviceIdentity(syncSettingsDirectory)
     val server = SyncServer(syncSettingsDirectory, trustStore)
@@ -103,7 +115,14 @@ private fun startSyncListener(
     Thread {
         while (true) {
             try {
-                server.acceptOne().use { connection -> CaptureSessionReceiver.receiveAndImport(connection, importer) }
+                server.acceptOne().use { connection ->
+                    when (val outcome = CaptureSessionReceiver.receiveAndImport(connection, importer, processingClient)) {
+                        is CaptureSessionImportOutcome.Processed ->
+                            println("inkstave: capture session imported and processed: '${outcome.manifest.title}'")
+                        is CaptureSessionImportOutcome.ImportedRaw ->
+                            println("inkstave: capture session imported raw (${outcome.reason}): '${outcome.manifest.title}'")
+                    }
+                }
             } catch (e: IOException) {
                 // server.close() would unblock an in-progress accept()/receive() with exactly this
                 // exception -- this app never calls it (see this function's doc), so in practice this

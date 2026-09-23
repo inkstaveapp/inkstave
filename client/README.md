@@ -17,9 +17,12 @@ client/
 │                 hit-testing), pedal key-mapping + settings persistence
 │                 (commonMain/jvmCommon/desktopMain pedal/ package), LAN
 │                 discovery/pairing/capture-session transport (commonMain/
-│                 jvmCommon/desktopMain/androidMain sync/ package, M4), and
-│                 the real library/viewer/annotation/pedal-settings/pairing
-│                 Compose screens (jvmCommon -- see "jvmCommon" below)
+│                 jvmCommon/desktopMain/androidMain sync/ package, M4), a
+│                 desktop-only HTTP client + best-effort launcher for
+│                 processing-service (desktopMain processing/ package, M4 --
+│                 java.net.http.HttpClient, no new dependency), and the real
+│                 library/viewer/annotation/pedal-settings/pairing Compose
+│                 screens (jvmCommon -- see "jvmCommon" below)
 ├── androidApp/   Android application module: Compose entry point, SAF-backed
 │                 file pickers (DocumentPicker.kt), and the camera capture
 │                 flow (CaptureActivity.kt/CameraCapture.kt, M4)
@@ -99,6 +102,17 @@ is normally already satisfied by the JDK requirement above) -- it's how
 `app.inkstave.shared.sync` generates this device's self-signed sync identity
 on first run (`DeviceIdentityProvisioning.desktop.kt`'s doc explains why
 `keytool` rather than a library).
+
+For a received capture session's photos to actually come back cleaned
+(rather than falling back to raw import -- `ROADMAP.md`'s M4 entry),
+`../processing-service/` needs its own `.venv` set up per that directory's
+own README. `ProcessingServiceLauncher.kt` looks for it a few directory
+levels around the desktop app's own working directory and starts it
+automatically if it's not already running -- a **dev-checkout-only**
+mechanism, not yet a real release-packaging story (see that class's own
+doc, and `ROADMAP.md` M7). Without it, capture sessions still work end to
+end, just unprocessed -- this is a real, expected, gracefully-handled
+degradation, not a hard dependency for the app to run at all.
 
 ## Known rough edges (as of M0, September 2026)
 
