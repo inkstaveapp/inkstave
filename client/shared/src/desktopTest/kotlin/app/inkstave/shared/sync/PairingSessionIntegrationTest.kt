@@ -6,6 +6,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -74,6 +75,16 @@ class PairingSessionIntegrationTest {
         assertTrue(initiateResult.fingerprintSha256.isNotBlank())
         assertTrue(acceptResult.fingerprintSha256.isNotBlank())
         assertTrue(initiateResult.shortCode.isNotBlank())
+
+        // What each side pins is the OTHER's certificate, so the two pinned fingerprints must
+        // differ (two distinct identities)...
+        assertNotEquals(initiateResult.fingerprintSha256, acceptResult.fingerprintSha256)
+        // ...but the code shown to the human for "confirm this matches on both devices" must be
+        // identical on both screens. A real phone-to-desktop pairing found this wasn't true when
+        // the code was just the peer certificate's own fingerprint (each screen fingerprinted a
+        // different certificate, so they could never match, making the human comparison step
+        // meaningless).
+        assertEquals(initiateResult.shortCode, acceptResult.shortCode)
     }
 
     @Test

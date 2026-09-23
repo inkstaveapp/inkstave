@@ -59,14 +59,23 @@ able to push files. Pairing establishes trust once, explicitly:
    this connection, only the identity exchange below) and each sends its own
    `DeviceIdentity` (`deviceId` + display name) as one framed message
    (`PairingSession`/`MessageFraming`).
-3. **The certificate each side actually presented during the handshake is
-   fingerprinted (SHA-256 of its DER encoding,
-   `CertificateFingerprint.sha256`) and shown to the user as a short,
-   human-comparable code** (`CertificateFingerprint.shortCode` — the first
-   32 bits, formatted as space-separated hex groups) — this *is* "a short
-   pairing code" as originally specified, derived from the real certificate
-   rather than a separately-generated value, so confirming the code is
-   confirming the actual key being pinned, not a proxy for it. No QR code in
+3. **Both devices' certificates are combined into one short,
+   human-comparable code, shown identically on both screens**
+   (`CertificateFingerprint.combinedShortCode` — the two certificates' SHA-256
+   digests sorted into a fixed byte order, concatenated, hashed again, then
+   the first 32 bits formatted as space-separated hex groups). The user
+   confirms the two screens show the *same* code. This is "a short pairing
+   code" as originally specified, derived from the real certificates rather
+   than a separately-generated value. It is deliberately a *combination* of
+   both certificates, not the fingerprint of just the peer's: each device
+   pins the *other's* certificate, so a per-side "fingerprint of what I just
+   received" is a different certificate on each screen and can never match —
+   found via a real phone-to-desktop pairing where the two screens showed
+   different codes. A man-in-the-middle necessarily terminates two separate
+   TLS sessions with different certificate pairs, so the two victims' screens
+   would differ, which is what makes the comparison meaningful. What actually
+   gets pinned in step 4 is still the peer's own certificate fingerprint
+   (`CertificateFingerprint.sha256`), not this combined code. No QR code in
    v1 (real, valid future UX work; not needed for the security property).
 4. **Only once the user explicitly confirms** does the fingerprint get
    persisted as a `TrustedPeer` (`PeerTrustStore`, a local JSON file per

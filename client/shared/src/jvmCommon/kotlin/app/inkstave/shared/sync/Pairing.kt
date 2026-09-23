@@ -16,6 +16,11 @@ import javax.net.ssl.SSLSocket
  * [AwaitingConfirmation.fingerprintSha256]; skipping that step and auto-trusting on a successful
  * handshake alone would defeat the entire point of pairing (see `TrustAnyPeerCertificate`'s doc
  * for why the handshake succeeding proves nothing about identity on its own).
+ *
+ * [fingerprintSha256] is the *peer's* certificate alone (what gets pinned); [shortCode] is a
+ * different value on purpose -- it's derived from both devices' certificates combined, so both
+ * screens show the identical code and a human comparing them is actually checking something
+ * (`CertificateFingerprint.combinedShortCode`).
  */
 sealed interface PairingOutcome {
     data class AwaitingConfirmation(
@@ -58,7 +63,7 @@ object PairingSession {
             val sslContext = deviceIdentitySslContext(settingsDirectory, TrustAnyPeerCertificate)
             (sslContext.socketFactory.createSocket() as SSLSocket).use { socket ->
                 socket.connect(InetSocketAddress(device.host, device.port), connectTimeoutMillis)
-                socket.startHandshake()
+                rethrowingSecurityExceptionsAsIO { socket.startHandshake() }
                 writeIdentity(socket, localIdentity)
                 val peerIdentity = readIdentity(socket)
                 outcomeFor(socket, peerIdentity)
@@ -75,7 +80,7 @@ object PairingSession {
     ): PairingOutcome =
         try {
             socket.use {
-                socket.startHandshake()
+                rethrowingSecurityExceptionsAsIO { socket.startHandshake() }
                 val peerIdentity = readIdentity(socket)
                 writeIdentity(socket, localIdentity)
                 outcomeFor(socket, peerIdentity)
@@ -102,10 +107,21 @@ object PairingSession {
         peerIdentity: DeviceIdentity,
     ): PairingOutcome {
         val peerCertificate = socket.session.peerCertificates.first() as X509Certificate
+        // Always present here: both PairingServer (`needClientAuth = true`) and the initiating
+        // side authenticate with their own identity certificate as part of this exact handshake --
+        // `localCertificates` is only null for a session that never presented one at all.
+        val localCertificate =
+            checkNotNull(socket.session.localCertificates?.firstOrNull()) { "pairing session presented no local certificate" }
         return PairingOutcome.AwaitingConfirmation(
             peerIdentity = peerIdentity,
+            // The *peer's* own fingerprint, not combined with anything: this is what gets pinned
+            // (`PeerTrustStore.add`) and checked on every later connection, so it must remain
+            // exactly the one certificate `PinnedFingerprintTrustManager` will later be handed.
             fingerprintSha256 = CertificateFingerprint.sha256(peerCertificate),
-            shortCode = CertificateFingerprint.shortCode(peerCertificate),
+            // A value both devices compute identically from both certificates -- see
+            // `CertificateFingerprint.combinedShortCode` for why fingerprinting just the peer's
+            // certificate here (the earlier behavior) could never actually match across screens.
+            shortCode = CertificateFingerprint.combinedShortCode(localCertificate, peerCertificate),
         )
     }
 
