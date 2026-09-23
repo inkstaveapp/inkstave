@@ -16,6 +16,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,12 +27,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.LibraryIndexRepository
 import app.inkstave.shared.index.ScoreSummary
+import app.inkstave.shared.pedal.PedalAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,7 +44,10 @@ import kotlinx.coroutines.withContext
  * the local index database"): lists every score from [index] -- never by
  * scanning `.smpk` files on load, per ADR-0005 -- and offers importing a
  * PDF or a set of images via [pickPdf]/[pickImages] + [importer]. Tapping a
- * row opens that score in the viewer via [onOpenScore].
+ * row opens that score in the viewer via [onOpenScore]. The top bar's
+ * "Pedal Settings" action ([onOpenPedalSettings], `ROADMAP.md` M3) is the
+ * one navigation entry point into [PedalSettingsScreen] -- there's no
+ * other settings surface yet for it to live under.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +57,7 @@ fun LibraryScreen(
     pickPdf: suspend () -> PickedFile?,
     pickImages: suspend () -> List<PickedFile>,
     onOpenScore: (filePath: String) -> Unit,
+    onOpenPedalSettings: () -> Unit,
 ) {
     var scores by remember { mutableStateOf(index.listAll()) }
     var importing by remember { mutableStateOf(false) }
@@ -102,7 +109,16 @@ fun LibraryScreen(
         }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Inkstave") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Inkstave") },
+                actions = {
+                    TextButton(onClick = onOpenPedalSettings, modifier = Modifier.testTag(TestTags.PEDAL_SETTINGS_ENTRY)) {
+                        Text("Pedal Settings")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             Box {
                 ExtendedFloatingActionButton(
@@ -176,8 +192,28 @@ internal object TestTags {
     const val ANNOTATION_DELETE_BUTTON = "annotation-delete-button"
     const val TEXT_DIALOG_FIELD = "annotation-text-dialog-field"
     const val TEXT_DIALOG_CONFIRM = "annotation-text-dialog-confirm"
+    const val PERFORMANCE_MODE_TOGGLE = "viewer-performance-mode-toggle"
+    const val OVERLAP_TURN_TOGGLE = "viewer-overlap-turn-toggle"
+    const val PEDAL_SETTINGS_ENTRY = "library-pedal-settings-entry"
+    const val PEDAL_SETTINGS_RESET = "pedal-settings-reset"
+    const val PEDAL_SETTINGS_CAPTURE_PROMPT = "pedal-settings-capture-prompt"
+    const val PEDAL_SETTINGS_BACK = "pedal-settings-back"
 
     fun scoreListItem(scoreId: String) = "library-score-item-$scoreId"
 
     fun modeButton(mode: AnnotationMode) = "annotation-mode-${mode.name.lowercase()}"
+
+    fun pedalActionRow(action: PedalAction) = "pedal-settings-action-${action.name.lowercase()}"
+
+    fun pedalAddBindingButton(action: PedalAction) = "pedal-settings-add-${action.name.lowercase()}"
+
+    fun pedalBindingChip(
+        action: PedalAction,
+        key: Key,
+    ) = "pedal-settings-chip-${action.name.lowercase()}-${key.keyCode}"
+
+    fun pedalBindingChipRemove(
+        action: PedalAction,
+        key: Key,
+    ) = "pedal-settings-chip-remove-${action.name.lowercase()}-${key.keyCode}"
 }

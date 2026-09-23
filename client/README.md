@@ -14,8 +14,10 @@ client/
 │                 index (SQLDelight, ADR-0005), PDF/image import pipeline,
 │                 a spatial-index-backed annotation engine (commonMain
 │                 annotation/ package -- undo/redo, viewport culling/
-│                 hit-testing), and the real library/viewer/annotation
-│                 Compose screens (jvmCommon -- see "jvmCommon" below)
+│                 hit-testing), pedal key-mapping + settings persistence
+│                 (commonMain/jvmCommon/desktopMain pedal/ package), and the
+│                 real library/viewer/annotation/pedal-settings Compose
+│                 screens (jvmCommon -- see "jvmCommon" below)
 ├── androidApp/   Android application module: Compose entry point, SAF-backed
 │                 file pickers (DocumentPicker.kt)
 ├── desktopApp/   Linux desktop JVM application: Compose Desktop entry point,
@@ -36,11 +38,33 @@ library/viewer UI all live there rather than in `commonMain` (which can't see
 `jvmCommon`, `actual` in `androidMain`/`desktopMain`.
 
 Owned by the `client-ui`, `android-platform`, and `linux-desktop` agents —
-see `../.claude/agents/`. M1 and M2 (`../ROADMAP.md`) are real: import a PDF
-or a set of images, list the library from the local index, view a score
-with swipe/tap/keyboard page turning, and annotate pages (pen, highlight,
-stamps, text, undo/redo, persisted back into the `.smpk`). Pedal input,
-capture/sync, and multi-part scores are still ahead (M3+).
+see `../.claude/agents/`. M1, M2, and M3 (`../ROADMAP.md`) are real: import
+a PDF or a set of images, list the library from the local index, view a
+score with swipe/tap/keyboard/pedal page turning, annotate pages (pen,
+highlight, stamps, text, undo/redo, persisted back into the `.smpk`), remap
+pedal bindings (`PedalSettingsScreen`), and enter a minimal-chrome
+performance mode. Capture/sync and multi-part scores are still ahead (M4+).
+**Not done yet, and not claimed:** M3's pedal support has never touched
+real pedal hardware -- see `ROADMAP.md`'s M3 entry for exactly what is and
+isn't verified.
+
+**Android hardware key events (`MainActivity.dispatchKeyEvent`):**
+`ViewerScreen`/`PedalSettingsScreen` both listen for keys via Compose's own
+`onPreviewKeyEvent`, which works reliably on desktop but is a real risk on
+Android specifically -- hardware key events there are dispatched to
+`Activity.dispatchKeyEvent` *before* Compose's own focus-based key handling
+runs at all, and this app's touch-driven page-turning gestures are exactly
+the kind of thing that can knock Compose's internal focus off whatever
+element is listening. Both composables instead register a plain
+`(Key) -> Boolean` handler that `MainActivity` calls directly from
+`dispatchKeyEvent`, sidestepping Compose focus for key handling on Android
+entirely (see `ViewerScreen`'s `onRawKeyHandlerChange` doc for the full
+reasoning). Converts the native `android.view.KeyEvent` via Compose's own
+public `KeyEvent(nativeKeyEvent)` wrapper, not a hand-rolled keycode
+conversion -- `Key`'s internal representation packs the native keycode
+together with other bits, so going through Compose's own conversion is
+what guarantees the result compares equal to constants like
+`Key.DirectionRight` the same way.
 
 ## Building
 
@@ -99,7 +123,9 @@ a comment at its call site, not just noted here:
   `./gradlew :shared:desktopTest` with working network access to confirm;
   see `ROADMAP.md`'s M1 entry for the full account, including why the
   Android instrumented equivalent was written but deliberately left
-  unwired.
+  unwired. `ui/PedalSettingsUiTest.kt` (M3) hits the identical wall for the
+  identical reason -- everything else M3 added (`pedal/` package,
+  `SoftKeyboard.kt`) needed no new dependency and is fully verified.
 
 None of these are permanent -- they're the actual state of the Kotlin/AGP/
 Compose ecosystem transition happening right as this was scaffolded, and

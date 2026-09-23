@@ -6,9 +6,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.Key
 import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
 import app.inkstave.shared.index.LibraryIndexRepository
+import app.inkstave.shared.pedal.PedalKeyMapping
 
 /** Which screen [App] is currently showing. Library is always the start screen. */
 private sealed interface Screen {
@@ -17,6 +19,8 @@ private sealed interface Screen {
     data class Viewer(
         val filePath: String,
     ) : Screen
+
+    data object PedalSettings : Screen
 }
 
 /**
@@ -31,6 +35,14 @@ private sealed interface Screen {
  * @param importer writes newly-picked PDFs/images into the library as `.smpk` files.
  * @param pickPdf launches the platform's file picker for a single PDF; `null` means the user cancelled.
  * @param pickImages launches the platform's file picker for one or more image files, in the order to import them.
+ * @param pedalMapping current pedal key bindings (`ROADMAP.md` M3); [onPedalMappingChange] persists a change
+ *   the user makes in [PedalSettingsScreen] -- the platform entry point (`MainActivity`/`Main.kt`) owns
+ *   actually saving it via `PedalSettingsStore`, the same division of responsibility `LibraryImporter`
+ *   already uses for where the library itself lives.
+ * @param onRawKeyHandlerChange the Android key-dispatch bridge both [ViewerScreen] and [PedalSettingsScreen]
+ *   register into while they're the active screen -- see [ViewerScreen]'s own doc on this parameter for why
+ *   it exists. Desktop's default no-op is correct: `Main.kt` never calls the registered handler, since
+ *   desktop delivers key events to the focused composable directly.
  */
 @Composable
 fun App(
@@ -38,6 +50,9 @@ fun App(
     importer: LibraryImporter,
     pickPdf: suspend () -> PickedFile?,
     pickImages: suspend () -> List<PickedFile>,
+    pedalMapping: PedalKeyMapping,
+    onPedalMappingChange: (PedalKeyMapping) -> Unit,
+    onRawKeyHandlerChange: (((Key) -> Boolean)?) -> Unit = {},
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
 
@@ -50,11 +65,21 @@ fun App(
                     pickPdf = pickPdf,
                     pickImages = pickImages,
                     onOpenScore = { filePath -> screen = Screen.Viewer(filePath) },
+                    onOpenPedalSettings = { screen = Screen.PedalSettings },
                 )
             is Screen.Viewer ->
                 ViewerScreen(
                     filePath = current.filePath,
+                    pedalMapping = pedalMapping,
                     onBack = { screen = Screen.Library },
+                    onRawKeyHandlerChange = onRawKeyHandlerChange,
+                )
+            is Screen.PedalSettings ->
+                PedalSettingsScreen(
+                    mapping = pedalMapping,
+                    onMappingChange = onPedalMappingChange,
+                    onBack = { screen = Screen.Library },
+                    onRawKeyHandlerChange = onRawKeyHandlerChange,
                 )
         }
     }

@@ -193,10 +193,85 @@ assumed.
 
 ## M3 — Pedal & performance mode
 
-- [ ] Bluetooth/USB page-turner pedal support on Android.
-- [ ] Pedal support on Linux desktop.
-- [ ] Performance mode: screen-on lock, minimal chrome, configurable turn
-      gesture-to-pedal mapping, optional half-page/overlap turn behavior.
+Built around a real constraint: the repo owner has a pedal but didn't know
+(and wasn't at a device to check) what keys it actually sends -- and no
+pedal vendor's keys are one true standard anyway (see
+`PedalKeyMapping.DEFAULT`'s own doc). So this milestone is deliberately
+"good defaults covering every major vendor's factory mode, plus a foolproof
+remap flow," not a hardcoded guess.
+
+- [x] Bluetooth/USB page-turner pedal support on Android. These pedals pair
+      as standard HID keyboards (no vendor SDK, no `BLUETOOTH_CONNECT`
+      permission needed); the real work was that Android hardware key
+      events are dispatched via `Activity.dispatchKeyEvent`, *before*
+      Compose's own focus-based key handling even runs, and depending on
+      Compose focus surviving this app's touch-driven page-turning
+      gestures wasn't something that could be verified without physical
+      hardware. `MainActivity.dispatchKeyEvent` bridges directly to the
+      same `PedalKeyMapping`/`handlePedalAction` logic desktop uses, so
+      neither platform can drift into handling a `PedalAction` differently
+      (`app.inkstave.shared.pedal`, `ViewerScreen`'s `onRawKeyHandlerChange`).
+- [x] Pedal support on Linux desktop: `ViewerScreen`'s existing
+      `onPreviewKeyEvent` (M1's hardcoded arrow keys) now looks up
+      `PedalKeyMapping` instead.
+- [x] Performance mode: minimal chrome (toolbar/back button/page indicator
+      hidden; page turning -- swipe, tap zone, pedal -- stays fully live) with
+      one always-visible toggle to get back out; screen-on lock via
+      `WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON`
+      (`PerformanceMode.android.kt`) -- Android-only by design, a documented
+      no-op on desktop (`PerformanceMode.desktop.kt`), since a laptop's
+      display-sleep timing is the user's own setting to control, not this
+      app's to override; configurable pedal mapping via `PedalSettingsScreen`
+      (below); optional half-page/overlap turn via `HorizontalPager`'s own
+      negative-`pageSpacing` support (a real Compose Foundation feature, not
+      a custom transition) -- worth a visual check once at a device, given
+      an open, not-fully-triaged upstream Compose issue around negative
+      `pageSpacing` (`ViewerScreen.kt`'s `OVERLAP_PAGE_SPACING` doc).
+- **The remap flow, the actual fix for "I don't know my pedal's keys":**
+  `PedalSettingsScreen` (entry point: `LibraryScreen`'s "Pedal Settings"
+  action) lists each action's bound keys with per-key removal, and an "Add
+  binding" → "press the key you want to use now" capture flow -- a real
+  key listener (`onPreviewKeyEvent`, desktop-reliable on its own; the same
+  `onRawKeyHandlerChange` Android bridge as the viewer, for the same
+  focus-reliability reason) that binds whatever key arrives and shows what
+  it detected, so the user doesn't need to already know what their pedal
+  sends. Settings persist locally: `~/.config/inkstave/pedal-settings.json`
+  on desktop (XDG convention -- deliberately `$XDG_CONFIG_HOME`, not the
+  library's own `$XDG_DATA_HOME`: this is user configuration, not app
+  -generated data), `filesDir/pedal-settings.json` on Android.
+- **Also fixed, found while implementing this (not originally scoped, but
+  a real regression this exact milestone-plus-M2 combination creates):**
+  once a Bluetooth pedal is paired, Android's `InputMethodManager` sees a
+  hardware keyboard is connected and suppresses the soft keyboard's
+  auto-show-on-focus -- which would otherwise make M2's text-annotation
+  dialog (and any future text field) silently untypeable the moment a
+  pedal is connected. Every text field now explicitly requests the
+  keyboard on focus instead of trusting that heuristic
+  (`Modifier.showSoftKeyboardOnFocus`, `SoftKeyboard.kt`) -- the underlying
+  decision logic is a plain, fully unit-tested function
+  (`onTextFieldFocusChanged`, `SoftKeyboardTest`), not something that
+  needed the blocked UI-test dependency below to verify.
+- **Verified, precisely:** all pedal/settings/soft-keyboard logic is
+  covered by real, passing unit/integration tests with **no hardware
+  involved** -- `PedalKeyMappingTest` (7), `PedalSettingsStoreTest` (5),
+  `SoftKeyboardTest` (3) -- confirmed together with every pre-existing
+  test (67 total, 0 failures) via the same temporarily-disable-and-restore
+  method M2 used for the still-unresolved `compose.uiTest` dependency
+  (`client/README.md`'s "Known rough edges"), restored cleanly afterward
+  (`git diff` confirmed). `:shared:test`, `:androidApp:assembleDebug`,
+  `:desktopApp:build`, and `ktlintCheck` all pass directly, no workaround
+  needed. A new UI-level test, `PedalSettingsUiTest.kt`, is written against
+  the real composable (same pattern as `AppUiTest.kt`) but -- like
+  `AppUiTest.kt` -- **not observed to pass in this session**, for the
+  identical, already-documented dependency-resolution reason.
+- **Explicitly not done, and not claimed:** real pedal hardware validation.
+  Everything above is verified with synthetic key events; whether the
+  owner's actual pedal sends a key `PedalKeyMapping.DEFAULT` already
+  covers, or needs the remap flow, is unknown until they're at a physical
+  device with the pedal connected. That's expected and fine -- the remap
+  flow exists specifically so this doesn't need to be known in advance --
+  but it's a real gap, not a formality: nothing here has touched real
+  hardware yet.
 
 ## M4 — Capture & processing pipeline
 
