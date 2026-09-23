@@ -8,10 +8,14 @@ and Linux desktop (ADR-0001, `../docs/decisions/0001-client-framework.md`).
 ```
 client/
 ├── shared/       Business logic shared by all targets: .smpk format models
-│                 (Manifest/Part/PageMeta) + container reader/writer
-│                 (java.util.zip, jvmCommon), local library index (SQLDelight,
-│                 ADR-0005), PDF/image import pipeline, and the real library/
-│                 viewer Compose screens (jvmCommon -- see "jvmCommon" below)
+│                 (Manifest/Part/PageMeta/AnnotationLayer) + container
+│                 reader/writer (java.util.zip, jvmCommon -- SmpkUpdater
+│                 rewrites one entry in an existing package), local library
+│                 index (SQLDelight, ADR-0005), PDF/image import pipeline,
+│                 a spatial-index-backed annotation engine (commonMain
+│                 annotation/ package -- undo/redo, viewport culling/
+│                 hit-testing), and the real library/viewer/annotation
+│                 Compose screens (jvmCommon -- see "jvmCommon" below)
 ├── androidApp/   Android application module: Compose entry point, SAF-backed
 │                 file pickers (DocumentPicker.kt)
 ├── desktopApp/   Linux desktop JVM application: Compose Desktop entry point,
@@ -32,10 +36,11 @@ library/viewer UI all live there rather than in `commonMain` (which can't see
 `jvmCommon`, `actual` in `androidMain`/`desktopMain`.
 
 Owned by the `client-ui`, `android-platform`, and `linux-desktop` agents —
-see `../.claude/agents/`. M1 (`../ROADMAP.md`) is real: import a PDF or a set
-of images, list the library from the local index, view a score with swipe/
-tap/keyboard page turning. Annotations, pedal input, capture/sync, and
-multi-part scores are still ahead (M2+).
+see `../.claude/agents/`. M1 and M2 (`../ROADMAP.md`) are real: import a PDF
+or a set of images, list the library from the local index, view a score
+with swipe/tap/keyboard page turning, and annotate pages (pen, highlight,
+stamps, text, undo/redo, persisted back into the `.smpk`). Pedal input,
+capture/sync, and multi-part scores are still ahead (M3+).
 
 ## Building
 

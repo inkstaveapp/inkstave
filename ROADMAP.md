@@ -123,15 +123,73 @@ assumed.
 
 ## M2 — Annotation engine
 
-- [ ] Freehand drawing/highlighting layer per page.
-- [ ] Stamped symbol library (common notation marks) with placement,
-      resize, and per-instance styling.
-- [ ] Text annotations.
-- [ ] Undo/redo, annotation layer persisted in `.smpk`.
-- [ ] Rendering stays smooth (target: native frame rate, no visible
-      stutter) on pages with hundreds of annotation objects — viewport
-      culling and spatial indexing, per `docs/performance.md`. This is a
-      tested QA gate for this milestone, not an afterthought.
+- [x] Freehand drawing/highlighting layer per page. `AnnotationOverlay.kt`'s
+      Pen/Highlight modes, drag-gesture-captured, stored in normalized
+      page-point space (`app.inkstave.shared.annotation.PagePointSpace` —
+      see below).
+- [x] Stamped symbol library (common notation marks) with placement,
+      resize, and per-instance styling. Six marks (`STAMP_PALETTE`:
+      fermata, accent, staccato, forte, piano, repeat), tap-to-place,
+      drag-to-move (Select mode), toolbar +/− buttons to resize (a
+      resize-handle equivalent, not a pinch gesture — a deliberate,
+      documented M2 UX call, see `AnnotationOverlay.kt`). Drawn as vector
+      shapes/plain Latin letters rather than Unicode musical-symbol glyphs,
+      to avoid missing-glyph risk without a new font dependency.
+- [x] Text annotations. Tap to place (Text mode) or edit (Select mode) via
+      a dialog with a font-size stepper; rendered/dragged like every other
+      annotation type.
+- [x] Undo/redo, annotation layer persisted in `.smpk`. Undo/redo:
+      `AnnotationHistory`, a capped (50-deep) full-layer-snapshot stack —
+      simple and obviously correct given the bounded per-page size this
+      milestone's own performance target already assumes. Persistence:
+      `SmpkUpdater.updateAnnotationLayer` rewrites the one changed
+      `annotations/<pageId>.json` entry in an existing `.smpk` (every other
+      entry, including every *other* page's bytes, copied through
+      untouched — regression-tested explicitly), debounced 600ms after the
+      last edit so a burst of quick edits costs one rewrite, not one per
+      pointer-move.
+- [x] Rendering stays smooth... — **the QA gate is a proxy, stated
+      precisely, not overclaimed:** `docs/performance.md`'s target is a
+      frame-rate ("no visible stutter"), which isn't meaningfully
+      automatable headlessly. What's actually tested and verified:
+      `AnnotationSpatialIndex` (a uniform grid, `docs/performance.md`'s
+      viewport-culling/hit-testing design) returns *exactly correct*
+      results against a 600-item stress page (proven against an
+      independent brute-force scan), and does so at **avg 0.0055ms per
+      query, avg 0.0010ms per hitTest**, over 2000 iterations each —
+      roughly 360x/2000x under the 2ms-per-query budget that target
+      implies (see `AnnotationSpatialIndexPerformanceTest`'s own doc for
+      the budget's derivation). That's evidence the indexing layer won't
+      be the bottleneck; it is not a literal measured frame rate, and
+      shouldn't be read as one.
+- **Format layer:** `AnnotationLayer`/`Stroke`/`Stamp`/`Highlight`/`TextNote`
+  Kotlin models added (`client/shared/.../format/AnnotationLayer.kt`,
+  mirroring `Manifest`/`Part`/`PageMeta`'s unknown-field-preserving
+  pattern — Python already had these from M0). `SmpkReader.readAnnotationLayer`
+  and the new `SmpkUpdater` extend the container (`docs/format-spec.md`'s
+  `annotations/<page-id>.json`) to read/update an existing `.smpk`, not
+  just write a fresh one.
+- **Verified green:** all 52 tests across the 15 test classes touched by
+  M2 (including every pre-existing M1 test — no regression) pass under
+  `:shared:desktopTest`; `:shared:test`, `ktlintCheck`, `:desktopApp:build`,
+  and `:androidApp:assembleDebug` all pass too. `:shared:desktopTest`
+  itself is still blocked in this specific sandboxed session by the
+  network issue `client/README.md`'s "Known rough edges" already documents
+  (a JVM/Gradle-specific outbound-network restriction unrelated to this
+  code) — worked around for verification *only* by temporarily commenting
+  out the one `compose.uiTest` dependency line and moving `AppUiTest.kt`
+  aside, running the real suite, confirming all 52 tests green, then
+  restoring both exactly (git diff confirms only the intended files
+  changed). Not a permanent change; the dependency is exactly as it was.
+- **UI-level end-to-end automation for M2 itself: not attempted.** M1's
+  `AppUiTest.kt` gap (real Compose UI interaction, blocked on the same
+  network issue) is unchanged by this pass. M2's headline e2e scenario
+  ("annotate a page, close and reopen the score, annotation is still there
+  and in the right place") is instead covered by `AnnotationEndToEndTest`
+  — a headless integration test driving the real
+  import → annotate → `SmpkUpdater` save → reopen path without real UI
+  widgets, the same honest pattern `LibraryImporterEndToEndTest` set for
+  M1.
 
 ## M3 — Pedal & performance mode
 

@@ -1,9 +1,21 @@
 package app.inkstave.shared.format
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+
+/** Writes [bytes] as a new entry named [name] in this [ZipOutputStream], then closes the entry. */
+private fun ZipOutputStream.putEntry(
+    name: String,
+    bytes: ByteArray,
+) {
+    putNextEntry(ZipEntry(name))
+    write(bytes)
+    closeEntry()
+}
 
 /**
  * One page's raster bytes plus its metadata document, as [SmpkWriter] needs
@@ -50,15 +62,6 @@ object SmpkWriter {
             }
         }
     }
-
-    private fun ZipOutputStream.putEntry(
-        name: String,
-        bytes: ByteArray,
-    ) {
-        putNextEntry(ZipEntry(name))
-        write(bytes)
-        closeEntry()
-    }
 }
 
 /**
@@ -93,6 +96,20 @@ class SmpkReader(
         return zip.getInputStream(entry).use { it.readBytes() }
     }
 
+    /**
+     * Reads `annotations/<pageId>.json`. Most pages have never been
+     * annotated, so a missing entry is the *expected* case, not an error --
+     * this returns [AnnotationLayer.empty] for [pageId] rather than
+     * throwing, unlike [readManifest]/[readPart]/[readPageMeta], which
+     * throw on a missing entry because manifest/part/page-meta are always
+     * present for a valid `.smpk`.
+     */
+    fun readAnnotationLayer(pageId: String): AnnotationLayer {
+        val entry = zip.getEntry("annotations/$pageId.json") ?: return AnnotationLayer.empty(pageId)
+        val text = zip.getInputStream(entry).use { it.readBytes().decodeToString() }
+        return AnnotationLayerJson.decode(text)
+    }
+
     private fun <T> readEntry(
         name: String,
         parse: (String) -> T,
@@ -105,4 +122,91 @@ class SmpkReader(
     private fun missing(entryName: String): Nothing = error("'$entryName' not found in ${zip.name} -- corrupt or not a valid .smpk package")
 
     override fun close() = zip.close()
+}
+
+/**
+ * Updates a page's annotation layer in an *existing* `.smpk` file on disk
+ * (M2: annotation edits happen against a score [SmpkWriter] already wrote
+ * during M1 import, not a fresh package). `java.util.zip`'s
+ * [ZipOutputStream] has no in-place entry replacement, so the pragmatic
+ * approach here is a full rewrite: read every existing entry from [file],
+ * write a fresh zip to a sibling temp file with only the target
+ * `annotations/<pageId>.json` entry swapped in (every other entry's bytes
+ * copied straight through, unchanged and un-recompressed), then atomically
+ * replace [file] with it.
+ *
+ * This is a real cost -- one full read+rewrite of the package per saved
+ * edit, not an incremental append -- but a deliberate M2 scope call, not a
+ * shortcut: `.smpk` files are small, single-digit-MB single scores, not
+ * whole libraries in one file, so a full rewrite is milliseconds, not a
+ * user-visible stall. [app.inkstave.shared.ui.AnnotationOverlay] debounces
+ * calls into this (save after a gesture ends and a short idle period) so
+ * it runs once per logical edit, not once per pointer-move event. If a
+ * later pass finds this is actually a measured bottleneck (e.g. once very
+ * large multi-part scores exist, M5+), an incremental zip-patching approach
+ * is the candidate optimization -- not needed yet.
+ */
+object SmpkUpdater {
+    /**
+     * Replaces (or adds, if none existed) the `annotations/<layer.pageId>.json`
+     * entry in [file] with [layer], leaving every other entry -- manifest,
+     * part, every page's PNG bytes and metadata, and every *other* page's
+     * annotation layer -- untouched. See [SmpkAnnotationUpdateTest] for the
+     * regression test proving untouched entries survive byte-for-byte.
+     */
+    fun updateAnnotationLayer(
+        file: File,
+        layer: AnnotationLayer,
+    ) {
+        val entryName = "annotations/${layer.pageId}.json"
+        val tempFile = File.createTempFile(".inkstave-update-", ".smpk.tmp", file.absoluteFile.parentFile)
+        try {
+            ZipFile(file).use { source ->
+                ZipOutputStream(tempFile.outputStream().buffered()).use { out ->
+                    var replacedExisting = false
+                    for (entry in source.entries()) {
+                        if (entry.name == entryName) {
+                            out.putEntry(entryName, AnnotationLayerJson.encode(layer).encodeToByteArray())
+                            replacedExisting = true
+                        } else {
+                            out.putNextEntry(ZipEntry(entry.name))
+                            source.getInputStream(entry).use { it.copyTo(out) }
+                            out.closeEntry()
+                        }
+                    }
+                    if (!replacedExisting) {
+                        out.putEntry(entryName, AnnotationLayerJson.encode(layer).encodeToByteArray())
+                    }
+                }
+            }
+            replaceAtomically(tempFile, file)
+        } finally {
+            tempFile.delete()
+        }
+    }
+
+    /**
+     * Moves [source] onto [destination], preferring an atomic move (so a
+     * reader never sees a partially-written `.smpk`) but falling back to a
+     * plain move if the filesystem doesn't support atomic moves across
+     * these two paths (e.g. different filesystems -- shouldn't happen here
+     * since [updateAnnotationLayer] creates [source] as a sibling of
+     * [destination], but this is cheap insurance against that assumption
+     * ever being violated).
+     */
+    private fun replaceAtomically(
+        source: File,
+        destination: File,
+    ) {
+        try {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
 }

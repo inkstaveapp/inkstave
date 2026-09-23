@@ -172,6 +172,12 @@ internal object TestTags {
     const val VIEWER_TAP_ZONE_PREVIOUS = "viewer-tap-zone-previous"
     const val VIEWER_TAP_ZONE_NEXT = "viewer-tap-zone-next"
     const val VIEWER_BACK_BUTTON = "viewer-back-button"
+    const val ANNOTATION_TOOLBAR = "annotation-toolbar"
+    const val ANNOTATION_DELETE_BUTTON = "annotation-delete-button"
+    const val TEXT_DIALOG_FIELD = "annotation-text-dialog-field"
+    const val TEXT_DIALOG_CONFIRM = "annotation-text-dialog-confirm"
 
     fun scoreListItem(scoreId: String) = "library-score-item-$scoreId"
+
+    fun modeButton(mode: AnnotationMode) = "annotation-mode-${mode.name.lowercase()}"
 }
