@@ -59,6 +59,8 @@ detekt release exists.
 | opencv-python-headless | ==4.14.0.94 | Apache-2.0 | Image pipeline (`inkstave_processing.pipeline`, `docs/image-pipeline.md`). Pinned to the latest 4.x line rather than the newly-released 5.x, deliberately -- see `processing-service/README.md`. `-headless` specifically: no GUI/Qt/X11 dependency needed for a service with no display. |
 | numpy | \>=2.1 (2.5.x installed) | BSD-3-Clause (+ small 0BSD/MIT/Zlib/CC0-1.0-licensed portions, per pip's own license metadata -- all permissive) | Image pipeline array operations. |
 | pillow | \>=11 (dev/test only) | MIT-CMU | Synthetic test-fixture image generation only (`tests/pipeline/fixtures.py`) -- not a pipeline runtime dependency. |
+| pytesseract | \>=0.3.10 (0.3.13 installed) | Apache-2.0 | Thin Python wrapper around the Tesseract OCR engine (below) -- `inkstave_processing.pipeline.ocr`, M4 slice 2. |
+| **Tesseract OCR** (`tesseract` binary -- **system package, not `pip`-installed**) | 5.3.4 (as installed on the dev machine this was added on) | Apache-2.0 | A required system-level prerequisite, not a Python dependency `pip install -e .` can satisfy -- see `processing-service/README.md`'s setup section, the same way `client/README.md` documents needing an Android SDK installed outside Gradle. Install via the OS package manager (e.g. `apt-get install tesseract-ocr` on Debian/Ubuntu) before running `processing-service`. |
 
 `inkstave-processing` also depends on `inkstave-format` (below), installed
 locally/editable from `format/python` -- not a third-party dependency.

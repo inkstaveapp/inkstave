@@ -70,6 +70,19 @@ Stages 4–5 (contrast, normalization) match this doc as originally written.
    *proposals* — the client must let the user confirm/edit before they're
    committed to `manifest.json`, never auto-commit silently.
 
+   **Implementation note (M4 slice 2,
+   `processing-service/src/inkstave_processing/pipeline/ocr.py`):**
+   `subtitle` is classified via this module's own extension of the above
+   heuristic (centered, below the title — a real engraving convention this
+   doc doesn't spell out explicitly). `lyricist` is **not** classified by
+   the current heuristic at all, despite being listed above: unlike
+   title/subtitle/composer/arranger, there's no positional convention for
+   it standardized enough across real sheet-music engravings to guess
+   without real risk of confidently mislabeling unrelated text as
+   "lyricist" — worse than proposing nothing. Left for manual entry unless
+   a defensible heuristic emerges later; see that module's docstring for
+   the full reasoning.
+
 ## Service interface (sketch)
 
 The processing service exposes a local API (loopback-only; never bound to a

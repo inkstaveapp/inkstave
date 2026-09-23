@@ -129,6 +129,27 @@ def resize_image(image: ImageU8, width: int, height: int) -> ImageU8:
     return cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA).astype(np.uint8)
 
 
+def decode_image(encoded_bytes: bytes) -> ImageU8:
+    """Decodes `encoded_bytes` (a whole PNG/JPEG/etc. file's bytes, as received over HTTP) into a
+    `(h, w, 3)` BGR `ImageU8` -- the same format every other function in this module produces and
+    consumes. Raises `ValueError` if the bytes aren't a decodable image, rather than returning
+    `None`/a malformed array for a caller to trip over later."""
+    buffer = np.frombuffer(encoded_bytes, dtype=np.uint8)
+    decoded = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+    if decoded is None:
+        raise ValueError("could not decode image bytes -- not a recognized image format")
+    return decoded.astype(np.uint8)
+
+
+def encode_png(image: ImageU8) -> bytes:
+    """Encodes `image` (grayscale or BGR) as PNG file bytes -- the inverse of `decode_image` for
+    the output side, and the same codec `docs/format-spec.md` specifies for `pages/<id>.png`."""
+    ok, buffer = cv2.imencode(".png", image)
+    if not ok:
+        raise ValueError("failed to encode image as PNG")
+    return bytes(buffer)
+
+
 def pad_image(
     image: ImageU8,
     top: int,

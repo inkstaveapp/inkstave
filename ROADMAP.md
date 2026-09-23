@@ -315,13 +315,55 @@ remap flow," not a hardcoded guess.
       deliberate stability call), `numpy` (both Apache-2.0/BSD-3-Clause,
       `NOTICE.md`), and `pillow` (MIT-CMU, dev/test-only — synthetic test
       fixtures, not a pipeline runtime dependency).
-- [ ] OCR pass for title/subtitle/composer/arranger/other metadata, surfaced
-      to the user for confirmation/edit before committing to the library.
-- [ ] Processed pages + metadata written back into a `.smpk`, synced back to
-      the originating device(s). Not started — the real `POST /process-page`
-      HTTP endpoint connecting this pipeline to the desktop client is also
-      deliberately deferred to land alongside OCR, so its request/response
-      shape doesn't need revising twice.
+- [x] OCR pass for title/subtitle/composer/arranger metadata, always
+      surfaced as *proposals* (never auto-committed — a hard requirement,
+      not a style choice; see `pipeline/ocr.py`'s module doc).
+      `processing-service/src/inkstave_processing/pipeline/ocr.py`, wired
+      as the pipeline's final stage (`pipeline/run.py`) and exposed via a
+      real `POST /process-page` endpoint (`app.py`) — see
+      `processing-service/README.md`'s "The HTTP API" section for its
+      request/response shape.
+      **Layout heuristic**, per `docs/image-pipeline.md`'s own stated
+      approach: title = largest, most-centered text in the page's upper
+      region; composer/arranger = smaller text on the right/left of what's
+      left there; subtitle = this module's own extension (centered, below
+      title — a real convention the doc doesn't spell out, so proposed
+      with visibly lower confidence than title's). **Lyricist is
+      deliberately never proposed** — no positional convention for it is
+      standardized enough across real engravings to guess without real
+      risk of confidently mislabeling unrelated text; left for manual
+      entry rather than guessed wrong (same reasoning M3's
+      `PedalKeyMapping.DEFAULT` used to leave a pedal mode's Enter key
+      unbound). Tested against synthetic title-page images with real
+      rendered text at known positions (no real scanned sheet music
+      exists to test against) — including a caught-and-fixed real bug:
+      composer (top-right) and arranger (top-left) credits on the same
+      visual row were initially merged into one garbled candidate by
+      Tesseract's own line segmentation; fixed by splitting a detected
+      "line" wherever the horizontal gap between words is large relative
+      to their height, not just trusting Tesseract's grouping directly.
+      New dependencies: `pytesseract` (Apache-2.0, thin wrapper) and the
+      **Tesseract OCR system binary itself** (Apache-2.0, not
+      `pip`-installable — a real external setup prerequisite, see
+      `processing-service/README.md` and `NOTICE.md`).
+- [x] `POST /process-page` HTTP endpoint (see above) returns processed
+      pages + metadata over the wire — **not yet done:** the *client*
+      actually calling this endpoint, and writing its response into a real
+      `.smpk` via `SmpkWriter`/`SmpkUpdater`. That's real follow-up work,
+      deliberately deferred until camera capture and LAN transfer exist to
+      feed it (there'd be nothing to call the endpoint *with* yet).
+      Also caught and fixed in this pass: `ProcessPageResponse` initially
+      mixed JSON casing conventions (snake_case at its own top level,
+      camelCase in the nested `processing`/`ocr` objects it reuses from
+      `inkstave_format`) — a real test failure, not a style nitpick, fixed
+      by giving the whole response the same camelCase convention
+      `inkstave_format`'s own models already use throughout
+      (`docs/format-spec.md`). Separately: `inkstave_format` itself was
+      missing a `py.typed` marker (PEP 561), which silently prevented
+      `mypy --strict` from actually type-checking anything imported from
+      it in a consuming package like this one — added (a packaging-only
+      fix, no model/schema change) so strict typing here means what it
+      claims to.
 
 ## M5 — Multi-part scores
 

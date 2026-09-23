@@ -27,6 +27,13 @@ def test_process_page_runs_all_stages_on_a_bowed_synthetic_photo() -> None:
     assert result.dewarp_mesh_version == DEWARP_MODEL_VERSION
     assert result.contrast_method == CONTRAST_METHOD
     assert result.aspect_ratio_class in ("a4", "letter", "custom")
+    # OCR (M4 slice 2) runs as the pipeline's final stage -- see run.py's doc for why. This
+    # synthetic fixture has no real text, so an empty/near-empty result is the correct outcome
+    # here; test_ocr.py covers the actual classification heuristic against realistic title-page
+    # fixtures.
+    assert isinstance(result.ocr_engine_version, str) and result.ocr_engine_version != ""
+    assert isinstance(result.ocr_candidates, dict)
+    assert isinstance(result.ocr_confidence, dict)
 
 
 def test_process_page_raises_a_specific_exception_when_no_page_is_found() -> None:

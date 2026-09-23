@@ -86,15 +86,19 @@ class NormalizeResult:
 @dataclass(frozen=True)
 class ProcessedPage:
     """The full pipeline's output for one page
-    (:func:`inkstave_processing.pipeline.run.process_page`).
+    (:func:`inkstave_processing.pipeline.run.process_page`) -- geometry,
+    contrast, normalization, *and* OCR (M4 slice 2) combined, matching
+    `docs/image-pipeline.md`'s stage list 1-6 as one end-to-end operation.
 
     Deliberately shaped to drop straight into `inkstave_format`'s
-    ``PageProcessing``/``PageMeta`` fields without reshaping -- see that
-    module's fields (``crop_polygon``, ``dewarp_mesh_version``,
-    ``contrast_method``) and `format/schema/page-meta.v1.schema.json`.
-    Converting this into an actual `PageMeta` (and wiring it into an HTTP
-    endpoint or `.smpk`) is out of scope for this pass -- see
-    `docs/decisions/`-style scope notes in `ROADMAP.md`'s M4 entry.
+    ``PageProcessing``/``PageOcr``/``PageMeta`` fields without reshaping --
+    see those models' fields (``crop_polygon``, ``dewarp_mesh_version``,
+    ``contrast_method``, ``engine_version``, ``candidates``, ``confidence``)
+    and `format/schema/page-meta.v1.schema.json`. ``ocr_candidates``/
+    ``ocr_confidence`` are exactly what `inkstave_processing.pipeline.ocr`
+    returns -- see that module's docstring for why they're *always
+    proposals*, never something this type (or anything downstream) should
+    treat as already-confirmed metadata.
     """
 
     image: ImageU8
@@ -104,3 +108,6 @@ class ProcessedPage:
     aspect_ratio_class: AspectRatioClass
     width: int
     height: int
+    ocr_engine_version: str
+    ocr_candidates: dict[str, str]
+    ocr_confidence: dict[str, float]
