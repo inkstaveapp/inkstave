@@ -1,9 +1,22 @@
 """OCR metadata extraction (`docs/image-pipeline.md` stage 6): proposes
-title/subtitle/composer/arranger candidates from a cleaned page image, using
-Tesseract OCR (via `pytesseract`, ADR-0002's already-settled engine choice)
-plus the positional/size layout heuristic that doc already specifies
-("title is typically the largest text near the top-center; composer/
-arranger typically top-right/top-left in smaller text").
+title/subtitle/composer/arranger/lyricist candidates from a cleaned page
+image, using Tesseract OCR (via `pytesseract`, ADR-0002's already-settled
+engine choice), in two layers:
+
+1. **Explicit text-label matching, checked first** (`_LABEL_PATTERNS`):
+   real sheet music very often states a credit outright -- "Composer: John
+   Smith", "Music by John Smith", "Arr. Jane Doe", "Lyrics by ...", "Words
+   by ..." -- and a recognized label is a far stronger signal than any
+   inferred position, so a line matching one of these patterns is
+   classified by its label regardless of where it sits on the page, and
+   removed from consideration by the positional heuristic below (title
+   included -- a large, centered "Composer: ..." line should not become the
+   title candidate just because it's large and centered).
+2. **Positional layout heuristic, as a fallback** for whatever a label
+   didn't already claim: "title is typically the largest text near the
+   top-center; composer/arranger typically top-right/top-left in smaller
+   text" (`docs/image-pipeline.md`'s own stated rule, unchanged from the
+   previous pass).
 
 **Always proposals.** This module never constructs or mutates a `Manifest`
 and never decides anything on a user's behalf -- it returns candidates plus
@@ -11,22 +24,37 @@ a confidence score per field for something else (the desktop client's
 confirmation UI, a later slice) to let a human accept or correct. This is a
 hard requirement stated in `docs/image-pipeline.md`, not a style preference.
 
-**Lyricist is deliberately not classified**, despite `docs/image-pipeline.md`
-listing it among OCR's candidate fields. Title (largest, centered) and
-composer/arranger (that doc's own "top-right/top-left" convention) each have
-a real positional convention to heuristically lean on; a lyricist credit
-doesn't have one nearly as standardized across real sheet-music engravings
--- it can appear near the composer/arranger block, at the foot of the page,
-or not at all. Guessing a position here risks confidently mislabeling
-unrelated text as "lyricist," which is worse than proposing nothing (the
-same reasoning `PedalKeyMapping.DEFAULT`, M3, used to leave a pedal mode's
-Enter key unbound rather than guess its direction wrong). Left for manual
-entry unless a defensible heuristic emerges later.
+**Lyricist is classifiable, but only via an explicit label** ("Lyrics by
+...", "Words by ...", "Text by ...", "Lyricist"), never via position. This
+refines, rather than reverses, the previous pass's reasoning: *position
+-only* guessing for lyricist is still excluded -- title (largest, centered)
+and composer/arranger (top-right/top-left) each have a real positional
+convention to lean on, but a lyricist credit doesn't have one nearly as
+standardized across real engravings, so inferring one from position alone
+still risks confidently mislabeling unrelated text. An explicit label is a
+different, much safer kind of signal -- it isn't a position guess at all,
+it's the page stating outright what the text is -- so it's exempt from that
+concern and lyricist becomes classifiable specifically (and only) that way.
+
+**Multiple names for the same field are combined, not reduced to one.**
+Two co-composers, or a composer credited on two separate lines, both end up
+in that field's candidate as one comma-joined string (`", ".join(...)`) --
+`OcrResult.candidates`/`inkstave_format.PageOcr.candidates` stay plain
+`dict[str, str]` (matching `docs/format-spec.md`'s `manifest.json` fields,
+which are single strings, not lists); a structured multi-value field would
+be a bigger, separate format-level decision nobody has asked for yet, so
+"multiple composers" is handled by formatting them into one good string
+value instead. A name naturally written as one OCR'd line ("John Smith &
+Jane Doe") is a single candidate already -- see `_LINE_SPLIT_GAP_HEIGHT_MULTIPLE`
+in this module for why normal word/"&"-spacing doesn't get mistaken for two
+separate credit blocks sharing a row, and `test_ocr.py` for the regression
+test proving it.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 
 from inkstave_processing.pipeline.types import ImageU8
 
@@ -56,6 +84,39 @@ _CENTERED_TOLERANCE_FRACTION = 0.6
 _TITLE_CONFIDENCE_WEIGHT = 1.0
 _SUBTITLE_CONFIDENCE_WEIGHT = 0.7
 _COMPOSER_ARRANGER_CONFIDENCE_WEIGHT = 0.6
+
+#: An explicit text label ("Composer: ...", "Music by ...") is a far more
+#: certain signal than any inferred position -- weighted higher than every
+#: positional weight above, though still scaled by Tesseract's own per-word
+#: confidence, since OCR can still misread the name itself even when the
+#: label is unambiguous.
+_LABEL_MATCH_CONFIDENCE_WEIGHT = 0.95
+
+#: Optional separator between a matched label and the name that follows it
+#: -- a colon, a dash, or just whitespace (all three appear in real
+#: engravings: "Composer: X", "Composer - X", "Composer X").
+_LABEL_SEPARATOR = r"\s*[:\-]?\s*"
+
+#: Case-insensitive label patterns for the three fields position alone
+#: isn't (or, for lyricist, was never) trusted enough to infer on its own.
+#: Title/subtitle deliberately have no label pattern here: sheet music
+#: doesn't conventionally prefix a title with "Title:", and forcing a
+#: pattern for it without real evidence of that convention would be
+#: guessing, the same mistake this module exists to avoid making elsewhere.
+_LABEL_PATTERNS: dict[str, re.Pattern[str]] = {
+    "composer": re.compile(
+        r"^\s*(composed\s+by|composer|music\s+by)" + _LABEL_SEPARATOR,
+        re.IGNORECASE,
+    ),
+    "arranger": re.compile(
+        r"^\s*(arranged\s+by|arrangement\s+by|arr\.?|arr:)" + _LABEL_SEPARATOR,
+        re.IGNORECASE,
+    ),
+    "lyricist": re.compile(
+        r"^\s*(lyrics\s+by|words\s+by|text\s+by|lyricist)" + _LABEL_SEPARATOR,
+        re.IGNORECASE,
+    ),
+}
 
 #: Tesseract's own sentinel in `image_to_data`'s `conf` column for "this
 #: isn't real recognized text" (e.g. a whitespace-only region) -- excluded
@@ -207,14 +268,57 @@ def _centeredness(line: TextLine, page_width: float) -> float:
     return max(0.0, 1.0 - abs(line.center_x - center_x) / tolerance)
 
 
+def _match_label(text: str) -> tuple[str, str] | None:
+    """If `text` starts with one of `_LABEL_PATTERNS`' recognized credit labels, returns
+    `(field, remainder)` with the label stripped and whitespace-trimmed; `None` if no pattern
+    matches, or if a pattern matches but leaves nothing usable after it (a bare "Composer:" with
+    no name isn't a candidate)."""
+    for field, pattern in _LABEL_PATTERNS.items():
+        match = pattern.match(text)
+        if match is None:
+            continue
+        remainder = text[match.end() :].strip()
+        if remainder:
+            return field, remainder
+    return None
+
+
+def _classify_by_label(lines: list[TextLine]) -> tuple[dict[str, list[TextLine]], list[TextLine]]:
+    """Splits `lines` into label-matched lines, grouped by field (label stripped from each
+    line's `text`, via `dataclasses.replace` since `TextLine` is frozen), and the lines with no
+    matching label at all -- the pool the positional heuristic falls back to for whatever a label
+    didn't already claim."""
+    labeled: dict[str, list[TextLine]] = {field: [] for field in _LABEL_PATTERNS}
+    unlabeled: list[TextLine] = []
+    for line in lines:
+        matched = _match_label(line.text)
+        if matched is None:
+            unlabeled.append(line)
+            continue
+        field, remainder = matched
+        labeled[field].append(replace(line, text=remainder))
+    return labeled, unlabeled
+
+
+def _combined_confidence(lines: list[TextLine], weight: float) -> float:
+    """The mean of `lines`' own OCR confidences, scaled by `weight` (how much this module's own
+    classification signal -- a label match, or a positional inference -- should itself be
+    trusted) and rounded to 3 decimal places, matching this module's existing confidence
+    precision elsewhere."""
+    return round(sum(line.confidence for line in lines) / len(lines) * weight, 3)
+
+
 def extract_metadata_candidates(image: ImageU8) -> OcrResult:
     """Runs OCR on `image` and classifies recognized text lines into title/subtitle/composer/
-    arranger candidates via this module's layout heuristic (see module docstring for the full
-    reasoning, including why lyricist is excluded). Returns empty `candidates`/`confidence` dicts
-    -- not an error -- if no text at all is recognized in the page's upper region (a blank page,
-    a page with no visible title block, or OCR simply finding nothing): that's a real, expected
-    outcome this pipeline's caller (the eventual client-side confirmation UI) is expected to
-    handle as "nothing to suggest," not a failure.
+    arranger/lyricist candidates: explicit text labels first, the positional layout heuristic as
+    a fallback for whatever a label didn't already claim (see module docstring for the full
+    reasoning). Multiple lines classified into the same field -- multiple label matches, or
+    multiple lines on the same side of the page -- are combined into one comma-joined candidate
+    rather than one replacing the others. Returns empty `candidates`/`confidence` dicts -- not an
+    error -- if no text at all is recognized in the page's upper region (a blank page, a page
+    with no visible title block, or OCR simply finding nothing): that's a real, expected outcome
+    this pipeline's caller (the eventual client-side confirmation UI) is expected to handle as
+    "nothing to suggest," not a failure.
     """
     engine_version, lines = _run_tesseract(image)
     if not lines:
@@ -228,17 +332,34 @@ def extract_metadata_candidates(image: ImageU8) -> OcrResult:
     candidates: dict[str, str] = {}
     confidence: dict[str, float] = {}
 
-    # Title: the largest text in the upper region, weighted toward being centered too --
+    # Explicit labels first, and removed from the pool the positional heuristic below ever sees
+    # -- a large, centered "Composer: John Smith" line must not also become the title candidate
+    # just because it happens to be large and centered.
+    labeled, unlabeled_lines = _classify_by_label(upper_lines)
+    for field, matched_lines in labeled.items():
+        if not matched_lines:
+            continue
+        candidates[field] = ", ".join(line.text for line in matched_lines)
+        confidence[field] = _combined_confidence(matched_lines, _LABEL_MATCH_CONFIDENCE_WEIGHT)
+
+    if not unlabeled_lines:
+        return OcrResult(
+            engine_version=engine_version,
+            candidates=candidates,
+            confidence=confidence,
+        )
+
+    # Title: the largest remaining (unlabeled) text, weighted toward being centered too --
     # "largest text near the top-center" (docs/image-pipeline.md), stated directly.
     def title_score(line: TextLine) -> float:
         return line.height * (0.5 + 0.5 * _centeredness(line, float(page_width)))
 
-    title_line = max(upper_lines, key=title_score)
+    title_line = max(unlabeled_lines, key=title_score)
     candidates["title"] = title_line.text
     title_centeredness = _centeredness(title_line, float(page_width))
     title_confidence = title_line.confidence * title_centeredness * _TITLE_CONFIDENCE_WEIGHT
     confidence["title"] = round(title_confidence, 3)
-    remaining = [line for line in upper_lines if line is not title_line]
+    remaining = [line for line in unlabeled_lines if line is not title_line]
 
     # Subtitle: this module's own extension beyond docs/image-pipeline.md's literal text (which
     # doesn't specify a subtitle position) -- standard engraving convention centers a subtitle
@@ -255,23 +376,36 @@ def extract_metadata_candidates(image: ImageU8) -> OcrResult:
         confidence["subtitle"] = round(subtitle_line.confidence * _SUBTITLE_CONFIDENCE_WEIGHT, 3)
         remaining = [line for line in remaining if line is not subtitle_line]
 
-    # Composer / arranger: "typically top-right/top-left in smaller text" (docs/image-pipeline.md)
-    # -- of what's left in the upper region, propose the rightmost as composer and the leftmost as
-    # arranger, each only if it's genuinely on its named side of center (never propose a line on
-    # the left as "composer" just because nothing else was found).
+    # Composer / arranger fallback: "typically top-right/top-left in smaller text"
+    # (docs/image-pipeline.md) -- of what's left, *every* remaining line genuinely on the right
+    # becomes a composer candidate (not just the single rightmost), same for arranger on the
+    # left, combined per this function's own multi-name-combining rule. Skipped entirely for a
+    # field a label already claimed above -- a label is a stronger signal than position, so
+    # position must not add to or override it.
     center_x = page_width / 2.0
-    if remaining:
-        rightmost = max(remaining, key=lambda line: line.center_x)
-        if rightmost.center_x > center_x:
-            candidates["composer"] = rightmost.text
-            composer_confidence = rightmost.confidence * _COMPOSER_ARRANGER_CONFIDENCE_WEIGHT
-            confidence["composer"] = round(composer_confidence, 3)
-            remaining = [line for line in remaining if line is not rightmost]
-    if remaining:
-        leftmost = min(remaining, key=lambda line: line.center_x)
-        if leftmost.center_x < center_x:
-            candidates["arranger"] = leftmost.text
-            arranger_confidence = leftmost.confidence * _COMPOSER_ARRANGER_CONFIDENCE_WEIGHT
-            confidence["arranger"] = round(arranger_confidence, 3)
+    if not labeled["composer"] and remaining:
+        right_lines = sorted(
+            (line for line in remaining if line.center_x > center_x),
+            key=lambda line: line.y,
+        )
+        if right_lines:
+            candidates["composer"] = ", ".join(line.text for line in right_lines)
+            confidence["composer"] = _combined_confidence(
+                right_lines,
+                _COMPOSER_ARRANGER_CONFIDENCE_WEIGHT,
+            )
+            claimed = {id(line) for line in right_lines}
+            remaining = [line for line in remaining if id(line) not in claimed]
+    if not labeled["arranger"] and remaining:
+        left_lines = sorted(
+            (line for line in remaining if line.center_x < center_x),
+            key=lambda line: line.y,
+        )
+        if left_lines:
+            candidates["arranger"] = ", ".join(line.text for line in left_lines)
+            confidence["arranger"] = _combined_confidence(
+                left_lines,
+                _COMPOSER_ARRANGER_CONFIDENCE_WEIGHT,
+            )
 
     return OcrResult(engine_version=engine_version, candidates=candidates, confidence=confidence)

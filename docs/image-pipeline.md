@@ -70,18 +70,35 @@ Stages 4–5 (contrast, normalization) match this doc as originally written.
    *proposals* — the client must let the user confirm/edit before they're
    committed to `manifest.json`, never auto-commit silently.
 
-   **Implementation note (M4 slice 2,
+   **Implementation note (M4 slice 2 and its follow-up refinement,
    `processing-service/src/inkstave_processing/pipeline/ocr.py`):**
    `subtitle` is classified via this module's own extension of the above
    heuristic (centered, below the title — a real engraving convention this
-   doc doesn't spell out explicitly). `lyricist` is **not** classified by
-   the current heuristic at all, despite being listed above: unlike
-   title/subtitle/composer/arranger, there's no positional convention for
-   it standardized enough across real sheet-music engravings to guess
-   without real risk of confidently mislabeling unrelated text as
-   "lyricist" — worse than proposing nothing. Left for manual entry unless
-   a defensible heuristic emerges later; see that module's docstring for
-   the full reasoning.
+   doc doesn't spell out explicitly).
+
+   **Explicit text labels are checked first and take priority over
+   position.** Real sheet music often states a credit outright ("Composer:
+   John Smith", "Music by John Smith", "Arr. Jane Doe", "Lyrics by ...",
+   "Words by ..."); a recognized label is a stronger signal than any
+   inferred position, so a matching line is classified by its label
+   regardless of where it sits on the page, and excluded from the
+   positional heuristic entirely (including title selection). `lyricist`
+   is classified **only** via an explicit label, never by position alone —
+   unlike title/subtitle/composer/arranger, there's no positional
+   convention for it standardized enough across real engravings to guess
+   from position without real risk of confidently mislabeling unrelated
+   text as "lyricist," but an explicit label isn't a position guess at
+   all, so it's exempt from that concern.
+
+   **Multiple names for the same field are combined**, not reduced to one:
+   two co-composers (each on their own labeled or positionally-matching
+   line) end up as one comma-joined candidate rather than one silently
+   replacing the other. The `candidates`/`confidence` shape stays a plain
+   `dict[str, str]`/`dict[str, float]` either way — this is string
+   formatting, not a structured multi-value field.
+
+   See that module's docstring for the full reasoning, including the exact
+   label patterns matched.
 
 ## Service interface (sketch)
 
