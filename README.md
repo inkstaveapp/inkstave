@@ -75,5 +75,5 @@ reasoning). Third-party dependencies and their licenses are tracked in
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). There is no remote/hosted repository
-yet — that gets set up once the project has something runnable.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The repository lives at
+<https://github.com/inkstaveapp/inkstave>.

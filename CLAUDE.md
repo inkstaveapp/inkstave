@@ -90,10 +90,9 @@ relevant domain context and constraints:
 
 ## Working conventions
 
-- No remote/hosted repo exists yet (see README). Don't add a `git remote`,
-  push, or assume a hosting provider (GitHub org, CI provider, etc.) without
-  being told — the human said a remote gets created once something runnable
-  exists.
+- The repo is hosted at `github.com/inkstaveapp/inkstave` (`origin`). Don't
+  push, force-push, open or comment on issues/PRs, or change repo settings
+  without being asked — the human decides when anything leaves this machine.
 - Every new third-party dependency (library, model, font, dataset) must be
   license-checked and recorded in `NOTICE.md` before or alongside the commit
   that introduces it. Use the `licensing-compliance` agent for this.

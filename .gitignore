@@ -35,3 +35,6 @@ Thumbs.db
 # Editors
 .vscode/
 !.vscode/extensions.json
+
+# Kotlin compiler session state
+client/.kotlin/

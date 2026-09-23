@@ -1,9 +1,9 @@
 # Contributing
 
-This project is in its earliest stages (see [ROADMAP.md](ROADMAP.md)) and
-does not yet have a public remote or issue tracker — that gets set up once
-there's something runnable (end of M0/start of M1). Until then, this file
-describes how work happens locally.
+This project is in its earliest stages (see [ROADMAP.md](ROADMAP.md)). The
+repository is hosted at <https://github.com/inkstaveapp/inkstave>; the pull
+request process below is still being worked out, so please open an issue to
+discuss a change before investing in a large one.
 
 ## AI-assisted, human-supervised
 
@@ -21,7 +21,7 @@ human review. That means:
   changes to a standing decision explicitly rather than drifting away from
   it silently.
 
-## Workflow (pre-remote)
+## Workflow
 
 1. Work happens on local branches or directly reviewed by the repo owner.
 2. Keep commits scoped and the message focused on *why* the change was
@@ -34,11 +34,11 @@ human review. That means:
    or `ROADMAP.md`) in the same change if it alters behavior those docs
    describe.
 
-## Workflow (post-remote, future)
+## Pull requests (still being defined)
 
-Once a remote exists, this section will be updated with the actual PR
-process, branch naming, and CI requirements. Expect standard practice:
-feature branches, PRs reviewed before merge, CI green before merge.
+The exact PR process, branch naming, and CI requirements will be written
+down here as they settle. Expect standard practice: feature branches, PRs
+reviewed before merge, CI green before merge.
 
 ## Code style
 

@@ -55,9 +55,9 @@ assumed.
       (see `docs/decisions/0005-local-library-index-database.md`), with a
       passing integration test (insert/select/search/delete against a real
       SQLite database via the JDBC driver).
-- [ ] Create the remote repository and push, once the above builds cleanly.
-      Deliberately not done in this pass — `CLAUDE.md` says a remote gets
-      created when explicitly asked for, not assumed.
+- [x] Create the remote repository and push: `github.com/inkstaveapp/inkstave`.
+      The CI workflow has not yet run against GitHub Actions; its first run
+      on that repository is the real test of `.github/workflows/ci.yml`.
 
 ## M1 — Single-device viewer (Android + Linux)
 
@@ -612,7 +612,7 @@ remap flow," not a hardcoded guess.
 - [ ] Android release build (F-Droid-friendly — no proprietary deps).
 - [ ] Linux packaging (Flatpak and/or AppImage).
 - [ ] Versioned `.smpk` compatibility policy finalized.
-- [ ] Public remote repo, issue tracker, contribution flow opened up.
+- [ ] Issue tracker and contribution flow opened up (the public remote exists).
 
 ## Later / exploratory (not committed)
 
