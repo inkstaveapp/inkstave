@@ -25,4 +25,15 @@ object DesktopSettingsPaths {
 
     /** File path for the saved pedal key mapping ([PedalSettingsStore]). */
     fun pedalSettingsFile(): File = File(xdgConfigHome(), "$APP_DIR_NAME/pedal-settings.json")
+
+    /**
+     * Directory for this device's sync identity and trust store (`ROADMAP.md` M4,
+     * `app.inkstave.shared.sync`) -- `$XDG_CONFIG_HOME`, the same class of directory as
+     * [pedalSettingsFile]: this is device configuration a user implicitly sets up by pairing,
+     * not app-generated library data (`$XDG_DATA_HOME`, `DesktopLibraryPaths`).
+     */
+    fun syncSettingsDirectory(): File = File(xdgConfigHome(), "$APP_DIR_NAME/sync")
+
+    /** File path for the saved trusted-peer list ([app.inkstave.shared.sync.PeerTrustStore]). */
+    fun peerTrustStoreFile(): File = File(syncSettingsDirectory(), "trusted-peers.json")
 }
