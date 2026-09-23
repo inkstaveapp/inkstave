@@ -32,6 +32,11 @@ pdfbox = "3.0.7"
 # (ROADMAP.md). Android-only, like PdfRenderer above; camera-view specifically
 # for PreviewView, the standard CameraX live-preview widget.
 camerax = "1.6.2"
+# JmDNS 3.6.1 (current stable per Maven Central, verified live): the one new
+# dependency M4's LAN discovery slice genuinely needs -- there's no JDK
+# -builtin mDNS/DNS-SD support, and JmDNS is pure Java (no native code), so it
+# works identically on both androidMain and desktopMain (docs/sync-protocol.md).
+jmdns = "3.6.1"
 
 [libraries]
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
@@ -46,6 +51,7 @@ androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

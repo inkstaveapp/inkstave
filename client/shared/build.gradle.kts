@@ -67,6 +67,11 @@ kotlin {
             // visible here too, via the Kotlin Gradle plugin's source-set dependency
             // propagation -- no need to redeclare them.
             dependsOn(commonMain)
+            dependencies {
+                // LAN discovery (docs/sync-protocol.md, ROADMAP.md M4) -- pure Java, no
+                // native code, so it works identically on androidMain and desktopMain.
+                implementation(libs.jmdns)
+            }
         }
         val jvmCommonTest by creating {
             dependsOn(commonTest)
