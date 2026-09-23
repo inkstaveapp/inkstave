@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "id": "22222222-2222-2222-2222-222222222222",
+  "title": "Cross-Language Round-Trip Fixture",
+  "subtitle": "Verifies Kotlin and Python agree on the same manifest.json",
+  "composer": "Test Composer",
+  "arranger": "Test Arranger",
+  "lyricist": "Test Lyricist",
+  "genre": "Test",
+  "tags": ["cross-lang", "round-trip", "fixture"],
+  "parts": ["part-1"],
+  "createdAt": "2026-01-01T00:00:00Z",
+  "modifiedAt": "2026-01-01T00:00:00Z",
+  "source": {
+    "type": "pdf-import",
+    "details": { "originalFilename": "cross-lang-fixture.pdf" }
+  },
+  "omrPreview": {
+    "note": "Deliberately unrecognized by format v1 models -- proves unknown-field preservation survives the Kotlin<->Python boundary, not just a single language's own round trip. See format/scripts/cross_lang_roundtrip.sh."
+  }
+}

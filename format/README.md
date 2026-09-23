@@ -49,4 +49,30 @@ python -m venv .venv
 `processing-service` depends on this package as a local editable install
 (see `../processing-service/README.md`) -- it's not published anywhere.
 
+## Cross-language round-trip check
+
+Each language's round-trip test (`ManifestJsonTest.kt`,
+`test_manifest_round_trip_preserves_unknown_fields` in
+`format/python/tests/test_format.py`) only proves that language reads back
+what it itself wrote. `format/scripts/cross_lang_roundtrip.sh` proves the
+stronger claim `docs/testing-strategy.md` actually asks for: a
+`manifest.json` written by **Kotlin** is read identically -- including its
+one deliberately-unrecognized field -- by **Python**, and vice versa,
+against a single canonical fixture
+(`format/fixtures/manifest.v1.cross-lang.json`) both `CrossLangRoundtripCli.kt`
+(`client/shared/src/jvmCommonTest/.../format/crosslang/`) and
+`inkstave_format.cross_lang_cli` verify against, so neither language's
+notion of "correct" can drift from the other's unnoticed.
+
+```
+# requires client/'s Gradle build resolvable and format/python's venv set up (above)
+./scripts/cross_lang_roundtrip.sh
+```
+
+Wired into `.github/workflows/ci.yml` as its own job. Deliberately
+verified (by temporarily breaking Kotlin's unknown-field preservation,
+confirming the script fails, then reverting) to actually catch a real
+cross-language mismatch, not just pass the happy path -- see the M0 entry
+in `ROADMAP.md`.
+
 Owned by the `score-format` agent — see `../.claude/agents/score-format.md`.

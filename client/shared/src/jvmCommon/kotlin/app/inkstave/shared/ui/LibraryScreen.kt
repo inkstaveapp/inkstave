@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.inkstave.shared.importer.LibraryImporter
 import app.inkstave.shared.importer.PickedFile
@@ -108,10 +109,19 @@ fun LibraryScreen(
                     text = { Text(if (importing) "Importing..." else "Import") },
                     onClick = { if (!importing) importMenuExpanded = true },
                     icon = { if (importing) CircularProgressIndicator(modifier = Modifier.padding(2.dp)) },
+                    modifier = Modifier.testTag(TestTags.IMPORT_FAB),
                 )
                 DropdownMenu(expanded = importMenuExpanded, onDismissRequest = { importMenuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Import PDF") }, onClick = { importPdfAction() })
-                    DropdownMenuItem(text = { Text("Import images") }, onClick = { importImagesAction() })
+                    DropdownMenuItem(
+                        text = { Text("Import PDF") },
+                        onClick = { importPdfAction() },
+                        modifier = Modifier.testTag(TestTags.IMPORT_PDF_MENU_ITEM),
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Import images") },
+                        onClick = { importImagesAction() },
+                        modifier = Modifier.testTag(TestTags.IMPORT_IMAGES_MENU_ITEM),
+                    )
                 }
             }
         },
@@ -119,12 +129,15 @@ fun LibraryScreen(
         if (scores.isEmpty()) {
             EmptyLibrary(modifier = Modifier.fillMaxSize().padding(padding))
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).testTag(TestTags.SCORE_LIST)) {
                 items(scores, key = ScoreSummary::id) { score ->
                     ListItem(
                         headlineContent = { Text(score.title) },
                         supportingContent = { score.composer?.let { Text(it) } },
-                        modifier = Modifier.clickable { onOpenScore(score.filePath) },
+                        modifier =
+                            Modifier
+                                .clickable { onOpenScore(score.filePath) }
+                                .testTag(TestTags.scoreListItem(score.id)),
                     )
                 }
             }
@@ -134,10 +147,31 @@ fun LibraryScreen(
 
 @Composable
 private fun EmptyLibrary(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.testTag(TestTags.EMPTY_LIBRARY), contentAlignment = Alignment.Center) {
         Column {
             Text("No scores yet", style = MaterialTheme.typography.titleMedium)
             Text("Import a PDF or a set of images to get started.")
         }
     }
+}
+
+/**
+ * Stable Compose `testTag` identifiers for [LibraryScreen] and [ViewerScreen],
+ * kept in one place so UI tests (`client/shared/src/desktopTest/.../ui/`)
+ * reference the same constants the composables set, rather than duplicating
+ * tag strings that could silently drift apart. Not part of this module's
+ * public API surface for app code -- UI tests only.
+ */
+internal object TestTags {
+    const val IMPORT_FAB = "library-fab-import"
+    const val IMPORT_PDF_MENU_ITEM = "library-menu-import-pdf"
+    const val IMPORT_IMAGES_MENU_ITEM = "library-menu-import-images"
+    const val EMPTY_LIBRARY = "library-empty-state"
+    const val SCORE_LIST = "library-score-list"
+    const val VIEWER_PAGE_INDICATOR = "viewer-page-indicator"
+    const val VIEWER_TAP_ZONE_PREVIOUS = "viewer-tap-zone-previous"
+    const val VIEWER_TAP_ZONE_NEXT = "viewer-tap-zone-next"
+    const val VIEWER_BACK_BUTTON = "viewer-back-button"
+
+    fun scoreListItem(scoreId: String) = "library-score-item-$scoreId"
 }

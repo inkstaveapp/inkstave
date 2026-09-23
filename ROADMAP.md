@@ -33,11 +33,17 @@ assumed.
       (`client/shared/.../format/Manifest.kt`) and Python
       (`format/python`, `inkstave-format`), each with its own passing
       round-trip test proving unknown-field preservation.
-      **Gap, not yet done:** a true *cross-language* round-trip test (write
-      with Kotlin, read with Python, or vice versa, against the same file)
-      per `docs/testing-strategy.md`'s integration-test bar for this area —
-      each language's round-trip is tested independently, but not yet
-      against each other. Worth doing before M1 leans on this.
+      **Gap closed:** `format/scripts/cross_lang_roundtrip.sh` now proves a
+      `manifest.json` written by Kotlin is read identically by Python, and
+      vice versa, unknown fields included, against a shared canonical
+      fixture (`format/fixtures/manifest.v1.cross-lang.json`) — see
+      `format/README.md`'s "Cross-language round-trip check". Verified to
+      actually catch a real mismatch (not just pass the happy path): the
+      check was run against a deliberately-broken Kotlin encoder, confirmed
+      to fail with a clear diff, then the break was reverted and the check
+      re-confirmed green. Wired into `.github/workflows/ci.yml` as its own
+      job (not yet run against a live CI provider — no remote exists yet,
+      same as the other jobs).
 - [x] Set up local dev tooling: ktlint (client), ruff + `mypy --strict`
       (both Python projects) all wired and passing;
       `.pre-commit-config.yaml` and `.github/workflows/ci.yml` added
@@ -80,14 +86,40 @@ assumed.
   `decodeImagePage` tests), `ktlintCheck`, `:desktopApp:build`, and
   `:androidApp:assembleDebug` (real APK produced) all pass from a clean
   build.
-- **Known gap, disclosed rather than silently skipped:** no true UI-level
-  end-to-end automation (Android instrumented tests, desktop UI-driver
-  automation) exists yet. `docs/testing-strategy.md`'s headline M1 scenario
-  ("import a PDF, see it in the library, open it, turn pages") is instead
-  covered by a headless integration test
-  (`LibraryImporterEndToEndTest.kt`) driving the real import → index →
-  `SmpkReader` code path without going through actual UI widgets. Worth
-  building real UI-level automation before M2 adds more screens to cover.
+- **UI-level end-to-end automation: partially closed.**
+  `client/shared/src/desktopTest/.../ui/AppUiTest.kt` now drives the real
+  `App`/`LibraryScreen`/`ViewerScreen` composables through real simulated UI
+  interaction (clicks on real semantic nodes, via Compose Multiplatform's
+  `runComposeUiTest`) covering the exact headline scenario
+  `docs/testing-strategy.md` calls for: import a PDF through the real
+  FAB/menu/file-picker seam, see it appear in the library from the index,
+  open it, turn pages via a real tap-zone click, and check a page indicator
+  added specifically to make that observable (`TestTags` in
+  `LibraryScreen.kt`). **Not yet build-verified**: the `compose.uiTest`
+  dependency it needs isn't in this machine's Gradle cache and could not be
+  downloaded in the session that added it, due to a JVM-specific outbound
+  -network restriction on that machine unrelated to this code (confirmed:
+  `curl`/`python3` reach Maven Central fine from the same shell, a plain
+  `java` process consistently cannot) -- see `client/README.md`'s "Known
+  rough edges". The dependency declaration itself is confirmed correct
+  (Gradle gets past script compilation and reaches the network call before
+  failing). **Action needed:** run `./gradlew :shared:desktopTest` with
+  working network access to confirm this test actually passes -- it has not
+  been observed to pass yet, only to be correctly written and wired.
+  An Android instrumented counterpart
+  (`client/shared/src/androidInstrumentedTest/.../ui/AppInstrumentedTest.kt`)
+  is written against the same scenario using the standard, long-stable
+  `androidx.compose.ui.test.junit4` API, but is **not wired into the Gradle
+  build** (no dependencies/source-set config added, for the same
+  network-verification reason, plus a judgment call not to guess at
+  unfamiliar Kotlin-Gradle-Plugin Android-instrumented-test API with no way
+  to compile-check it) and has never been compiled or run. Two KVM
+  -accelerated AVDs exist on the development machine this was written on,
+  so running it is very likely feasible once wired -- deliberately not
+  attempted in that pass to avoid launching a heavyweight emulator process
+  on a machine confirmed (twice) to be in concurrent active use by its
+  owner during automated sessions. See that file's module doc for exactly
+  what's left to wire it up.
 
 ## M2 — Annotation engine
 

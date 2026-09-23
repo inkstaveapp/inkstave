@@ -12,6 +12,12 @@ dependencies = ["pydantic>=2.9,<3", "jsonschema>=4.23,<5"]
 [project.optional-dependencies]
 dev = ["mypy>=1.14", "ruff>=0.8", "pytest>=8.3"]
 
+[project.scripts]
+# Cross-language `.smpk` format round-trip check
+# (format/scripts/cross_lang_roundtrip.sh) -- not a general-purpose CLI,
+# see cross_lang_cli.py's module docstring.
+inkstave-format-cross-lang-cli = "inkstave_format.cross_lang_cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/inkstave_format"]
 

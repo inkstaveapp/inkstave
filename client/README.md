@@ -73,6 +73,28 @@ a comment at its call site, not just noted here:
 - **detekt is not wired up** (only ktlint) -- detekt 1.23.8 doesn't
   configure cleanly against this AGP version; detekt 2.0 is alpha-only. See
   `NOTICE.md` and the comment in `build.gradle.kts`.
+- **`settings.gradle.kts`'s `google()` repository is content-filtered** to
+  `com.android.*`/`androidx.*`/`com.google.*` groups only. This isn't a
+  workaround for anything broken -- it's the standard, Google-recommended
+  pattern, added because `google()` was otherwise being tried (and 404ing)
+  for every non-Android dependency this project has, which is wasted
+  round-trips at best. If a future dependency genuinely needs `google()`
+  and doesn't match those group patterns, widen the filter rather than
+  removing it.
+- **The `compose.uiTest` dependency (`desktopTest`, for `ui/AppUiTest.kt`)
+  has not been build-verified as of the session that added it.** The
+  declaration is confirmed correct (Gradle reaches the actual network call,
+  past script compilation), but that session's environment had a
+  JVM-specific outbound-network restriction that blocked downloading it
+  specifically (`curl`/`python3` reached Maven Central fine from the same
+  shell; a plain `java` process consistently could not -- this looked like
+  a per-binary restriction on that machine, not a real connectivity
+  problem, and not something present in earlier sessions that successfully
+  downloaded dozens of other dependencies). Run
+  `./gradlew :shared:desktopTest` with working network access to confirm;
+  see `ROADMAP.md`'s M1 entry for the full account, including why the
+  Android instrumented equivalent was written but deliberately left
+  unwired.
 
 None of these are permanent -- they're the actual state of the Kotlin/AGP/
 Compose ecosystem transition happening right as this was scaffolded, and

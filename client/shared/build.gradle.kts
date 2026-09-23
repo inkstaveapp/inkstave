@@ -103,6 +103,19 @@ kotlin {
                 implementation(kotlin("test"))
                 implementation(libs.sqldelight.sqlite.driver)
                 implementation(libs.pdfbox)
+                // Real Compose UI tests (docs/testing-strategy.md's M1 UI-level e2e
+                // gap -- see ui/AppUiTest.kt): runComposeUiTest drives the actual
+                // LibraryScreen/ViewerScreen composables headlessly against Skiko's
+                // software renderer, no display server required. compose.uiTest is
+                // marked @ExperimentalComposeLibrary by the Compose Multiplatform
+                // Gradle plugin itself -- the opt-in below is for *declaring this
+                // dependency*, not related to any API stability concern in the tests
+                // that consume it. Confirmed to resolve correctly against a working
+                // network (script-compiles and reaches Maven Central); this session's
+                // environment could not download it -- see client/README.md's "Known
+                // rough edges" and ROADMAP.md's M1 entry.
+                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+                implementation(compose.uiTest)
             }
         }
     }
@@ -130,4 +143,41 @@ sqldelight {
             packageName.set("app.inkstave.shared.index")
         }
     }
+}
+
+// Cross-language `.smpk` format round-trip check
+// (format/scripts/cross_lang_roundtrip.sh, docs/testing-strategy.md).
+// Runs CrossLangRoundtripCli.kt as a plain JVM process against the desktop
+// target's MAIN compilation classpath -- desktop, not android, because this
+// is a CLI process and desktop is this project's JVM-CLI-capable target.
+// Deliberately the *main* compilation, not desktopTest's: see
+// CrossLangRoundtripCli.kt's module doc for why it lives in jvmCommon
+// (production) rather than jvmCommonTest -- using desktopTest here would
+// couple this task to every dependency desktopTest has, including
+// compose.uiTest (ui/AppUiTest.kt), for no reason this CLI actually needs.
+run {
+    val desktopMainCompilation =
+        kotlin.targets
+            .getByName("desktop")
+            .compilations
+            .getByName("main")
+
+    fun registerCrossLangTask(
+        taskName: String,
+        mode: String,
+    ) = tasks.register<JavaExec>(taskName) {
+        group = "verification"
+        description = "Cross-language .smpk manifest.json round-trip check ($mode mode) -- see CrossLangRoundtripCli.kt."
+        dependsOn("desktopMainClasses")
+        classpath = files(desktopMainCompilation.output.allOutputs, desktopMainCompilation.runtimeDependencyFiles)
+        mainClass.set("app.inkstave.shared.format.crosslang.CrossLangRoundtripCliKt")
+        args = listOf(mode)
+        // CROSS_LANG_FIXTURE_PATH / CROSS_LANG_TARGET_PATH are passed through
+        // from the environment by format/scripts/cross_lang_roundtrip.sh;
+        // JavaExec inherits the Gradle process's environment by default, so
+        // nothing else is needed here.
+    }
+
+    registerCrossLangTask("crossLangManifestWrite", "write")
+    registerCrossLangTask("crossLangManifestRead", "read")
 }

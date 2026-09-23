@@ -65,3 +65,32 @@ jobs:
           .venv/bin/ruff check .
           .venv/bin/mypy src/inkstave_processing tests
           .venv/bin/python -m pytest -q
+
+  cross-lang-roundtrip:
+    name: Cross-language .smpk format round-trip (format/scripts/cross_lang_roundtrip.sh)
+    # Self-contained (its own JDK + Android SDK + Python setup) rather than
+    # depending on the kotlin/python jobs above, since GitHub Actions jobs
+    # don't share a filesystem -- this needs both client/'s Gradle build and
+    # format/python's venv in the same job. Verifies the one thing neither
+    # the kotlin job nor the python job checks on its own: that a
+    # manifest.json written by one language is read identically -- unknown
+    # fields included -- by the other (docs/testing-strategy.md).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Accept Android SDK licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Set up format/python
+        working-directory: format/python
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: Run cross-language round-trip
+        run: ./format/scripts/cross_lang_roundtrip.sh

@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.inkstave.shared.format.SmpkReader
 import kotlinx.coroutines.Dispatchers
@@ -122,12 +123,35 @@ fun ViewerScreen(
             // Tap zones: left/right thirds turn the page, alongside HorizontalPager's
             // own swipe handling -- an alternative input, not a replacement for it.
             Row(modifier = Modifier.fillMaxSize()) {
-                TapZone(weight = 1f, onTap = { goTo(pagerState.currentPage - 1) })
-                TapZone(weight = 1f, onTap = null)
-                TapZone(weight = 1f, onTap = { goTo(pagerState.currentPage + 1) })
+                TapZone(
+                    weight = 1f,
+                    onTap = { goTo(pagerState.currentPage - 1) },
+                    testTag = TestTags.VIEWER_TAP_ZONE_PREVIOUS,
+                )
+                TapZone(weight = 1f, onTap = null, testTag = null)
+                TapZone(
+                    weight = 1f,
+                    onTap = { goTo(pagerState.currentPage + 1) },
+                    testTag = TestTags.VIEWER_TAP_ZONE_NEXT,
+                )
             }
 
             BackButton(onBack = onBack, modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
+
+            // "Page X of Y": a small, genuinely useful M1-scale affordance (most
+            // viewers show one) that also doubles as the one reliable signal a UI
+            // test can assert on to prove a tap/swipe/key actually changed the
+            // displayed page -- HorizontalPager's own internals aren't otherwise
+            // observable from outside the composable.
+            Text(
+                "${pagerState.currentPage + 1} / ${pageIds.size}",
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(12.dp)
+                        .testTag(TestTags.VIEWER_PAGE_INDICATOR),
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }
@@ -147,13 +171,15 @@ private fun PageContent(bitmap: ImageBitmap?) {
 private fun RowScope.TapZone(
     weight: Float,
     onTap: (() -> Unit)?,
+    testTag: String?,
 ) {
     Box(
         modifier =
             Modifier
                 .weight(weight)
                 .fillMaxHeight()
-                .let { base -> if (onTap != null) base.clickable(onClick = onTap) else base },
+                .let { base -> if (onTap != null) base.clickable(onClick = onTap) else base }
+                .let { base -> if (testTag != null) base.testTag(testTag) else base },
     )
 }
 
@@ -163,7 +189,7 @@ private fun BackButton(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.clickable(onClick = onBack),
+        modifier = modifier.clickable(onClick = onBack).testTag(TestTags.VIEWER_BACK_BUTTON),
         tonalElevation = 2.dp,
     ) {
         Text(

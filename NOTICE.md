@@ -41,6 +41,7 @@ before any release (`ROADMAP.md` M7), not something done by hand here.
 | ktlint-gradle (org.jlleitschuh.gradle.ktlint) | 14.2.0 | MIT | Dev tooling; wraps ktlint (also MIT). |
 | kotlinx-coroutines-core | 1.10.2 | Apache-2.0 | M1: library/viewer screen async import + lazy page loading. |
 | Apache PDFBox (org.apache.pdfbox:pdfbox) | 3.0.7 | Apache-2.0 | M1: desktop-only PDF-to-page rendering (`docs/decisions/0001-client-framework.md`). Android uses the platform's built-in `android.graphics.pdf.PdfRenderer` instead -- no dependency, no license entry needed for that path. |
+| Compose UI testing (`org.jetbrains.compose.ui:ui-test` via the `compose.uiTest` Gradle plugin accessor) | 1.12.1 (matches `composeMultiplatform`) | Apache-2.0 | Test-only (`client/shared/src/desktopTest/.../ui/AppUiTest.kt`), closes `docs/testing-strategy.md`'s M1 UI-level e2e gap for the desktop target. Declared and confirmed to script-compile correctly; not yet downloaded/build-verified in the environment this was added in -- see `ROADMAP.md`'s M1 entry and `client/README.md`'s "Known rough edges". |
 
 **Not added: detekt.** Tried at 1.23.8 (current stable); fails to
 configure against AGP 8.11.1/9.x with a `NoClassDefFoundError`. detekt 2.0
