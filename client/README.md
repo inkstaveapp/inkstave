@@ -15,9 +15,11 @@ client/
 │                 a spatial-index-backed annotation engine (commonMain
 │                 annotation/ package -- undo/redo, viewport culling/
 │                 hit-testing), pedal key-mapping + settings persistence
-│                 (commonMain/jvmCommon/desktopMain pedal/ package), and the
-│                 real library/viewer/annotation/pedal-settings Compose
-│                 screens (jvmCommon -- see "jvmCommon" below)
+│                 (commonMain/jvmCommon/desktopMain pedal/ package), LAN
+│                 discovery/pairing/capture-session transport (commonMain/
+│                 jvmCommon/desktopMain/androidMain sync/ package, M4), and
+│                 the real library/viewer/annotation/pedal-settings/pairing
+│                 Compose screens (jvmCommon -- see "jvmCommon" below)
 ├── androidApp/   Android application module: Compose entry point, SAF-backed
 │                 file pickers (DocumentPicker.kt), and the camera capture
 │                 flow (CaptureActivity.kt/CameraCapture.kt, M4)
@@ -44,12 +46,22 @@ a PDF or a set of images, list the library from the local index, view a
 score with swipe/tap/keyboard/pedal page turning, annotate pages (pen,
 highlight, stamps, text, undo/redo, persisted back into the `.smpk`), remap
 pedal bindings (`PedalSettingsScreen`), and enter a minimal-chrome
-performance mode. M4's first client-side slice is also real: capture photos
-with the device camera and import them the same way as any other image set
-(`CaptureActivity.kt`). LAN sync and multi-part scores are still ahead.
+performance mode. M4 is also real now: capture photos with the device
+camera and import them the same way as any other image set
+(`CaptureActivity.kt`); discover, pair with, and manage trust for other
+devices on the same LAN (`PairingScreen`, `app.inkstave.shared.sync`) over
+a TLS connection authenticated by a human-compared certificate fingerprint
+(not a shared password or QR code); and send a real capture session (a
+sequence of photos) to a paired device over that same connection
+(`LanSyncTransport`). Multi-part scores are still ahead (M5). **Wiring the
+camera-capture flow to actually *send* its photos through the sync
+transport to a paired desktop, instead of only importing locally, is real
+follow-up work, not done in this pass** -- see `ROADMAP.md`'s M4 entry.
 **Not done yet, and not claimed:** M3's pedal support and M4's camera
-capture have never touched real hardware -- see `ROADMAP.md`'s M3 and M4
-entries for exactly what is and isn't verified in each case.
+capture have never touched real hardware, and M4's sync has only ever been
+exercised between two processes on one machine's loopback interface, never
+a real phone and a real desktop on a real LAN -- see `ROADMAP.md`'s M3 and
+M4 entries for exactly what is and isn't verified in each case.
 
 **Android hardware key events (`MainActivity.dispatchKeyEvent`):**
 `ViewerScreen`/`PedalSettingsScreen` both listen for keys via Compose's own
@@ -81,7 +93,12 @@ what guarantees the result compares equal to constants like
 Requires JDK 17+ and an Android SDK with platform 37 / build-tools 37.0.0
 installed (`compileSdk`/`targetSdk` -- see the comments in
 `androidApp/build.gradle.kts` and `shared/build.gradle.kts` for why).
-`ANDROID_SDK_ROOT` (or `ANDROID_HOME`) must point to it.
+`ANDROID_SDK_ROOT` (or `ANDROID_HOME`) must point to it. The desktop app
+also needs `keytool` on `PATH` (standard in every JDK distribution, so this
+is normally already satisfied by the JDK requirement above) -- it's how
+`app.inkstave.shared.sync` generates this device's self-signed sync identity
+on first run (`DeviceIdentityProvisioning.desktop.kt`'s doc explains why
+`keytool` rather than a library).
 
 ## Known rough edges (as of M0, September 2026)
 

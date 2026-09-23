@@ -303,9 +303,85 @@ remap flow," not a hardcoded guess.
       -loading problem, not a network/dependency-resolution one) -- out of
       this slice's scope to chase further, but a more actionable lead than
       the previous vague "network-blocked" state for whoever picks it up.
-- [ ] LAN device discovery and pairing (see `docs/sync-protocol.md`).
-- [ ] Live transfer of captured photos from phone to desktop
-      (capture session).
+- [x] LAN device discovery and pairing (`docs/sync-protocol.md`,
+      `client/shared/src/.../sync/`). Discovery: JmDNS (`NOTICE.md`),
+      service type `_inkstave._tcp.local.` (corrected from a stale
+      pre-rename `_smreader` name still in the doc). Pairing: each device
+      generates a persistent self-signed TLS identity on first run
+      (`keytool` on desktop, `AndroidKeyStore`'s own certificate generation
+      on Android — no third-party crypto library, no hand-rolled crypto);
+      devices connect trusting any certificate for the identity exchange
+      only (`TrustAnyPeerCertificate`, textbook trust-on-first-use); the
+      *real* certificate presented is SHA-256-fingerprinted and shown as a
+      short human-comparable code; only on explicit user confirmation is
+      that fingerprint pinned (`PeerTrustStore`, a local file, the same
+      pattern `PedalSettingsStore` established). Every later connection is
+      authenticated by TLS itself refusing the handshake
+      (`PinnedFingerprintTrustManager`) unless the presented certificate
+      matches a pinned fingerprint — not a separate session key. UI:
+      `PairingScreen` (discovered-device list with "Pair", a pending
+      -confirmation card showing the short code, a trusted-devices list
+      with "Revoke"), reachable from `LibraryScreen`'s new "Sync Pairing"
+      action.
+      **A real security bug caught and fixed during this pass, not
+      shipped:** the server side (`PairingServer`/`SyncServer`) initially
+      never called `needClientAuth = true` on its `SSLServerSocket` — the
+      JDK default is server-only TLS auth, so without this, the server
+      never actually requested the connecting client's certificate at all,
+      meaning `PinnedFingerprintTrustManager` never ran and an *unpaired*
+      device's connection would have silently succeeded.
+      `LanSyncTransportIntegrationTest`'s "unpaired sender is rejected"
+      test is what caught it initially passing when it should have failed.
+      **Verified, for real:** `PeerTrustStoreTest` (5, pure logic),
+      `DeviceIdentityProvisioningTest` (3, real `keytool` invocations, a
+      real generated certificate's subject/fingerprint inspected
+      directly), `PairingSessionIntegrationTest` (2, a real loopback TLS
+      handshake between two genuinely separate generated identities, both
+      sides' learned peer identity and fingerprint asserted), and
+      `JmDnsSyncDiscoveryTest` (1) — **real two-instance multicast
+      discovery actually worked in this sandboxed session**, found within
+      the test's timeout, not assumed or skipped.
+- [x] Live transfer of captured photos from phone to desktop (capture
+      session) — the transport/protocol layer, per `docs/sync-protocol.md`.
+      `LanSyncTransport`/`SyncServer` (a plain TLS socket, authenticated by
+      the pinned fingerprint above — deliberately not WebSocket, no new
+      dependency beyond JmDNS) carry `CaptureSessionMessage`
+      (`SessionStart`/`Photo`/`SessionEnd`) framed by `MessageFraming` (a
+      4-byte length prefix) wrapping `CaptureSessionWire`'s 1-byte-type
+      -discriminant encoding — a small hand-written codec, not
+      `kotlinx.serialization`, specifically because `Photo.bytes` (a raw
+      photo, up to several MB) going through a general binary
+      serialization format would add real overhead this fixed,
+      three-message protocol doesn't need. The `SyncTransport`/
+      `SyncConnection` interfaces (`commonMain`) are the ADR-0003
+      abstraction boundary — `LanSyncTransport` is their only
+      implementation for v1.
+      **Verified, for real:** `MessageFramingTest` (4) and
+      `CaptureSessionWireTest` (5), both pure logic;
+      `LanSyncTransportIntegrationTest` (2) sends a real `SessionStart` +
+      two `Photo`s (4KB synthetic image bytes each) + `SessionEnd` over a
+      real loopback TLS connection between two genuinely separate device
+      identities each already trusting the other's real fingerprint
+      (simulating post-pairing state), and confirms exact byte-for-byte,
+      in-order delivery — plus the negative case (an unpaired sender's
+      connection is rejected by TLS itself, the test that caught the
+      `needClientAuth` bug above).
+      **Not done, deliberately:** wiring a live camera-capture session in
+      `CaptureActivity`/`LibraryScreen` to actually *send* its photos
+      through this transport to a paired desktop, instead of only
+      importing them locally (M4's camera-capture slice) — real follow-up
+      work once this transport existed to build it on, not attempted in
+      this pass to keep transport correctness as the priority (per this
+      pass's own scope: "protocol correctness wins" over UI integration if
+      both couldn't be done well). Also not done: the receiving
+      (desktop) side actually forwarding a received `Photo` to
+      `POST /process-page` and assembling the result into a `.smpk` — see
+      the note on that endpoint below, unchanged by this pass.
+      **Only ever verified on one machine's loopback interface** — a real
+      phone and a real desktop on a real LAN has not been exercised; that
+      is real, necessary follow-up validation for the repo owner, the same
+      standing caveat M3's pedal hardware and M4's camera preview already
+      have.
 - [x] Python pipeline: perspective correction, dewarping, crop to page
       bounds, contrast/B&W cleanup, aspect-ratio normalization.
       `processing-service/src/inkstave_processing/pipeline/` -- see
