@@ -10,7 +10,14 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2.9,<3", "jsonschema>=4.23,<5"]
 
 [project.optional-dependencies]
-dev = ["mypy>=1.14", "ruff>=0.8", "pytest>=8.3"]
+# types-jsonschema: jsonschema itself ships no inline type information, so
+# mypy --strict cannot check schemas.py without these stubs -- previously an
+# undeclared dependency (present in one already-set-up .venv but missing from
+# this list and from NOTICE.md), which meant a genuinely fresh `pip install
+# -e ".[dev]"` failed mypy --strict with "Library stubs not installed for
+# jsonschema". Found and fixed while setting up a single shared venv for
+# format/python + processing-service (see docs/ide-setup.md).
+dev = ["mypy>=1.14", "ruff>=0.8", "pytest>=8.3", "types-jsonschema>=4.23"]
 
 [project.scripts]
 # Cross-language `.smpk` format round-trip check

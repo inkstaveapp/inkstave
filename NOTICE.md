@@ -73,6 +73,7 @@ locally/editable from `format/python` -- not a third-party dependency.
 |---|---|---|---|
 | pydantic | \>=2.9 (2.13.x installed) | MIT | Typed models for `.smpk` JSON documents. |
 | jsonschema | \>=4.23 (4.26.x installed) | MIT | Validates against `format/schema/*.schema.json`. |
+| types-jsonschema | \>=4.23 (dev-only) | Apache-2.0 | Type stubs (typeshed) for `jsonschema`, needed for `mypy --strict` on `schemas.py` -- previously present but undeclared in one already-set-up environment; declared properly after a fresh shared-venv setup (`docs/ide-setup.md`) caught the gap. |
 | mypy | \>=1.14 (dev-only, shared by `format/python` and `processing-service`) | MIT | `mypy --strict`, required per `docs/coding-standards.md`. |
 | ruff | \>=0.8 (dev-only, shared) | MIT | Lint + format for both Python projects. |
 | pytest | \>=8.3 (dev-only, shared) | MIT | |

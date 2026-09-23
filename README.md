@@ -60,6 +60,12 @@ reviews and steers all significant work, and manual commits will happen
 alongside agent-driven ones. If you're an AI agent picking up work here,
 start with [CLAUDE.md](CLAUDE.md).
 
+Setting up an IDE across `client/`'s Kotlin Multiplatform project and the
+two Python packages (`format/python`, `processing-service`)? See
+[docs/ide-setup.md](docs/ide-setup.md) — one shared Python environment
+covers both packages, so IntelliJ IDEA Ultimate can open the whole repo
+at once instead of needing a second IDE for the Python side.
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE) (see that file for the

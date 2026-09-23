@@ -49,6 +49,11 @@ python -m venv .venv
 `processing-service` depends on this package as a local editable install
 (see `../processing-service/README.md`) -- it's not published anywhere.
 
+**Setting up one IDE for both Python packages (and `client/`) at once?**
+See `../docs/ide-setup.md` -- a single shared venv at the repo root
+works for `format/python` and `processing-service` together, instead of
+the two separate ones below.
+
 ## Cross-language round-trip check
 
 Each language's round-trip test (`ManifestJsonTest.kt`,
