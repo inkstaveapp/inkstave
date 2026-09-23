@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -55,5 +56,14 @@ class JmDnsSyncDiscoveryTest {
     private companion object {
         const val DISCOVERY_TIMEOUT_SECONDS = 15L
         const val ADVERTISED_PORT = 47823
+    }
+
+    @Test
+    fun `the mDNS address override accepts a literal IPv4 address and ignores anything else`() {
+        assertEquals("10.77.0.1", JmDnsSyncDiscovery.parseAddressOverride(" 10.77.0.1 ")?.hostAddress)
+        assertNull(JmDnsSyncDiscovery.parseAddressOverride(null))
+        assertNull(JmDnsSyncDiscovery.parseAddressOverride(""))
+        assertNull(JmDnsSyncDiscovery.parseAddressOverride("not-an-address"))
+        assertNull(JmDnsSyncDiscovery.parseAddressOverride("example.com"))
     }
 }

@@ -102,7 +102,28 @@ class JmDnsSyncDiscovery private constructor(
          * failed: EINVAL` on every attempt. [preferredLanAddress] sidesteps needing the platform's
          * own guess to be right at all.
          */
-        fun create(): JmDnsSyncDiscovery = JmDnsSyncDiscovery(preferredLanAddress()?.let { JmDNS.create(it) } ?: JmDNS.create())
+        fun create(): JmDnsSyncDiscovery =
+            JmDnsSyncDiscovery(
+                (parseAddressOverride(System.getenv(ADDRESS_OVERRIDE_ENV)) ?: preferredLanAddress())?.let { JmDNS.create(it) }
+                    ?: JmDNS.create(),
+            )
+
+        /**
+         * Name of the environment variable that forces the interface address mDNS binds to,
+         * bypassing [preferredLanAddress]'s guess -- for machines with several real interfaces, and
+         * for testing against an emulator on a private virtual bridge, where the "right" interface
+         * is one no heuristic could know about.
+         */
+        const val ADDRESS_OVERRIDE_ENV = "INKSTAVE_MDNS_ADDRESS"
+
+        private val IPV4_LITERAL = Regex("\\d{1,3}(\\.\\d{1,3}){3}")
+
+        /** The IPv4 address in [raw], or `null` when unset, blank, or not a literal IPv4 address. */
+        internal fun parseAddressOverride(raw: String?): Inet4Address? {
+            val text = raw?.trim().orEmpty()
+            if (!IPV4_LITERAL.matches(text)) return null
+            return java.net.InetAddress.getByName(text) as? Inet4Address
+        }
 
         /**
          * The first real, LAN-routable IPv4 address this device has, or `null` if none is found
