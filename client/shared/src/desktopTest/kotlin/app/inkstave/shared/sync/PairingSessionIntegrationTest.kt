@@ -48,7 +48,14 @@ class PairingSessionIntegrationTest {
 
         val initiateOutcome =
             PairingSession.initiate(
-                device = DiscoveredDevice("accepting-device-id", "Desktop", "127.0.0.1", server.boundPort, setOf(DeviceRole.PROCESSING)),
+                device =
+                    DiscoveredDevice(
+                        "accepting-device-id",
+                        "Desktop",
+                        listOf("127.0.0.1"),
+                        server.boundPort,
+                        setOf(DeviceRole.PROCESSING),
+                    ),
                 localIdentity = initiatingIdentity,
                 settingsDirectory = initiatingDirectory,
             )
@@ -91,7 +98,7 @@ class PairingSessionIntegrationTest {
     fun `connecting to a device that isn't actually listening fails cleanly, not by hanging`() {
         val outcome =
             PairingSession.initiate(
-                device = DiscoveredDevice("nobody", "Nobody", "127.0.0.1", UNUSED_PORT, emptySet()),
+                device = DiscoveredDevice("nobody", "Nobody", listOf("127.0.0.1"), UNUSED_PORT, emptySet()),
                 localIdentity = getOrCreateDeviceIdentity(initiatingDirectory),
                 settingsDirectory = initiatingDirectory,
                 connectTimeoutMillis = SHORT_CONNECT_TIMEOUT_MILLIS,

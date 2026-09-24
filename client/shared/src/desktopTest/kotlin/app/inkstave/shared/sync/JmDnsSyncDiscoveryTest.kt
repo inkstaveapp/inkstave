@@ -51,6 +51,8 @@ class JmDnsSyncDiscoveryTest {
         assertTrue(sawIt, "expected to discover the advertised device within $DISCOVERY_TIMEOUT_SECONDS s")
         assertEquals(ADVERTISED_PORT, discovered?.port)
         assertEquals(setOf(DeviceRole.PROCESSING), discovered?.roles)
+        assertEquals("Test Desktop", discovered?.displayName)
+        assertTrue(discovered?.hosts.orEmpty().isNotEmpty())
     }
 
     private companion object {

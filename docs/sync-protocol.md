@@ -29,11 +29,29 @@ below, next to what they replace.
   Java, `NOTICE.md`) — the one dependency this slice genuinely needed; there's
   no JDK-builtin mDNS/DNS-SD support, and JmDNS works unmodified on both
   Android and desktop (`JmDnsSyncDiscovery`).
+- **One responder per real LAN interface.** A device advertises and browses on
+  every interface that is up, supports multicast, and isn't loopback,
+  container/VM networking (`docker*`, `br-*`, `veth*`, `virbr*`, …) or
+  Android cellular data (`rmnet*`, `ccmni*`). Binding to a single guessed
+  interface proved unreliable on real hardware: a desktop with Ethernet and
+  Wi-Fi picked Wi-Fi, and a tablet then found it on only 2 of 5 cold starts,
+  because multicast between two Wi-Fi clients through the access point was
+  being lost; on Ethernet it was 8 of 8. `INKSTAVE_MDNS_ADDRESS=<IPv4>`
+  restricts discovery to one address, for emulator testing or diagnosis.
+- A device seen through several interfaces is reported once, with every
+  address it was seen at (`DiscoveredDevice.hosts`). Connecting tries them in
+  order and moves on only when an address is unreachable; a device that was
+  reached but refused (TLS rejection, fingerprint mismatch) is not retried on
+  its other addresses.
 - TXT record advertises: a stable device ID (`deviceId`, generated on first
   run, not tied to hardware identifiers that could leak PII — see
-  "Pairing & trust" below for where it actually comes from) and role hints
-  (`roles`, comma-joined `capture`/`processing`/both). Display name is the
-  mDNS service's own advertised name, not a separate TXT field.
+  "Pairing & trust" below for where it actually comes from), role hints
+  (`roles`, comma-joined `capture`/`processing`/both), and the display name
+  (`name`). The display name travels in TXT because the mDNS instance name
+  gets renamed ("Name (2)") whenever one device registers the same name more
+  than once — several interfaces, or its pairing and sync listeners side by
+  side — and that renaming must not reach the UI. Devices without a `name`
+  entry fall back to the instance name.
 - Discovery only lists devices; it does not by itself grant any access —
   `JmDnsSyncDiscovery.browse` surfaces a `DiscoveredDevice`, nothing more.
 

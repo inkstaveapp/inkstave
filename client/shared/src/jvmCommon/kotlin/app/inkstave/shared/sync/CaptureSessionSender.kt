@@ -61,7 +61,7 @@ class CaptureSessionSender(
     ): CaptureSessionSendOutcome {
         val device = discoverDeviceById(peer.deviceId, discoveryTimeoutMillis) ?: return CaptureSessionSendOutcome.PeerNotFound(peer)
         return try {
-            transport.connect(peer, device.host, device.port).use { connection ->
+            firstReachable(device.hosts) { host -> transport.connect(peer, host, device.port) }.use { connection ->
                 val sessionId = UUID.randomUUID().toString()
                 connection.send(CaptureSessionMessage.SessionStart(sessionId, scoreTitle))
                 photos.forEachIndexed { index, bytes -> connection.send(CaptureSessionMessage.Photo(sessionId, index, bytes)) }

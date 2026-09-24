@@ -1,5 +1,6 @@
 package app.inkstave.shared.sync
 
+import java.io.IOException
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import javax.jmdns.JmDNS
@@ -16,6 +17,7 @@ const val SYNC_SERVICE_TYPE = "_inkstave._tcp.local."
 
 private const val PROPERTY_DEVICE_ID = "deviceId"
 private const val PROPERTY_ROLES = "roles"
+private const val PROPERTY_DISPLAY_NAME = "name"
 private const val ACTIVE_QUERY_TIMEOUT_MILLIS = 3_000L
 private const val ACTIVE_QUERY_INTERVAL_MILLIS = 2_000L
 
@@ -24,13 +26,28 @@ private const val ACTIVE_QUERY_INTERVAL_MILLIS = 2_000L
  * by [JmDNS] -- pure Java, no native code, no platform-specific mDNS binding needed, so this one
  * class works unmodified on both `androidMain` and `desktopMain` (unlike, say, `PageBitmap`'s
  * genuinely platform-divergent decoding, this doesn't need an `expect`/`actual` split at all).
+ *
+ * Runs one [JmDNS] responder per real LAN interface ([lanAddresses]), advertising and browsing on
+ * all of them. A single responder bound to one interface proved unreliable on real hardware: a
+ * desktop with both Ethernet and Wi-Fi picked Wi-Fi, and a tablet on the same Wi-Fi then saw the
+ * desktop on only 2 of 5 cold starts (multicast between two Wi-Fi clients through the access
+ * point was being lost); bound to Ethernet it found the desktop on 8 of 8. Covering every
+ * interface avoids having to guess which one is reliable on a given network.
  */
 class JmDnsSyncDiscovery private constructor(
-    private val jmdns: JmDNS,
+    private val responders: List<JmDNS>,
 ) : SyncDiscovery {
-    private var registeredService: ServiceInfo? = null
+    private val registered = mutableListOf<Pair<JmDNS, ServiceInfo>>()
 
-    /** Advertises [identity] under [SYNC_SERVICE_TYPE], reachable on [port], offering [roles] in its TXT record. */
+    @Volatile private var closed = false
+
+    /**
+     * Advertises [identity] under [SYNC_SERVICE_TYPE], reachable on [port], offering [roles] in its
+     * TXT record, on every responder. The display name also travels in the TXT record: separate
+     * responders in one process (and the separate pairing/sync listeners) register the same
+     * instance name, which JmDNS resolves by renaming to "Name (2)", "Name (3)" -- an internal
+     * detail that shouldn't reach the UI.
+     */
     override fun advertise(
         identity: DeviceIdentity,
         port: Int,
@@ -40,37 +57,43 @@ class JmDnsSyncDiscovery private constructor(
             mapOf(
                 PROPERTY_DEVICE_ID to identity.deviceId,
                 PROPERTY_ROLES to roles.joinToString(","),
+                PROPERTY_DISPLAY_NAME to identity.displayName,
             )
-        val info = ServiceInfo.create(SYNC_SERVICE_TYPE, identity.displayName, port, 0, 0, props)
-        jmdns.registerService(info)
-        registeredService = info
+        responders.forEach { responder ->
+            // A ServiceInfo holds per-responder registration state, so each needs its own.
+            val info = ServiceInfo.create(SYNC_SERVICE_TYPE, identity.displayName, port, 0, 0, props)
+            responder.registerService(info)
+            synchronized(registered) { registered += responder to info }
+        }
     }
 
-    @Volatile private var closed = false
-
     /**
-     * Reports devices via JmDNS's passive listener *and* an active re-query loop. The listener
-     * alone proved unreliable on real hardware: a phone and a desktop both running this class,
-     * both plainly visible to `avahi-browse`, often never saw each other in-app (minutes, or
-     * never) because a single dropped multicast packet -- routine on Wi-Fi -- means the passive
-     * listener simply never fires. [JmDNS.list] sends a fresh query and waits for answers, so
-     * polling it every few seconds turns "one lost packet = never discovered" into "found on the
-     * next round". Reporting the same device repeatedly is harmless: [SyncDeviceListener.onDeviceFound]
-     * is documented as "advertised, or its info changed."
+     * Reports devices via JmDNS's passive listener *and* an active re-query loop, on every
+     * responder, merging each device's addresses across responders ([MergingDeviceListener]). The
+     * passive listener alone proved unreliable on real hardware: a single dropped multicast packet
+     * -- routine on Wi-Fi -- means it simply never fires. [JmDNS.list] sends a fresh query and waits
+     * for answers, so polling it every few seconds turns "one lost packet = never discovered" into
+     * "found on the next round". Reporting the same device repeatedly is harmless:
+     * [SyncDeviceListener.onDeviceFound] is documented as "advertised, or its info changed."
      */
     override fun browse(listener: SyncDeviceListener) {
-        jmdns.addServiceListener(SYNC_SERVICE_TYPE, JmDnsListenerAdapter(jmdns, listener))
+        val merged = MergingDeviceListener(listener)
+        responders.forEach { it.addServiceListener(SYNC_SERVICE_TYPE, JmDnsListenerAdapter(it, merged)) }
         Thread {
             while (!closed) {
-                try {
-                    jmdns.list(SYNC_SERVICE_TYPE, ACTIVE_QUERY_TIMEOUT_MILLIS).forEach { info ->
-                        info.toDiscoveredDevice()?.let(listener::onDeviceFound)
+                responders.forEach { responder ->
+                    try {
+                        responder.list(SYNC_SERVICE_TYPE, ACTIVE_QUERY_TIMEOUT_MILLIS).forEach { info ->
+                            info.toDiscoveredDevice()?.let(merged::onDeviceFound)
+                        }
+                    } catch (e: RuntimeException) {
+                        if (closed) return@Thread
                     }
+                }
+                try {
                     Thread.sleep(ACTIVE_QUERY_INTERVAL_MILLIS)
                 } catch (e: InterruptedException) {
                     return@Thread
-                } catch (e: RuntimeException) {
-                    if (closed) return@Thread
                 }
             }
         }.apply {
@@ -80,39 +103,44 @@ class JmDnsSyncDiscovery private constructor(
         }
     }
 
-    /** Unregisters this device's own advertisement (if any) and shuts down the underlying [JmDNS] instance. */
+    /** Unregisters this device's own advertisements (if any) and shuts down every responder. */
     override fun close() {
         closed = true
-        registeredService?.let { jmdns.unregisterService(it) }
-        jmdns.close()
+        synchronized(registered) { registered.forEach { (responder, info) -> responder.unregisterService(info) } }
+        responders.forEach { it.close() }
     }
 
     companion object {
         /**
-         * A fresh [JmDnsSyncDiscovery], bound to [preferredLanAddress] when one can be found, or
-         * the platform's own default-interface guess otherwise (`JmDNS.create()`'s no-arg form,
-         * `InetAddress.getLocalHost()` under the hood).
+         * A fresh [JmDnsSyncDiscovery] with one responder per address in [lanAddresses] (or just the
+         * [ADDRESS_OVERRIDE_ENV] address when that is set), falling back to the platform's own
+         * default-interface guess (`JmDNS.create()`'s no-arg form) only when no usable address
+         * exists at all. An interface whose responder fails to start is skipped rather than
+         * failing discovery as a whole.
          *
-         * That default guess is not reliable enough to trust as-is: on real hardware, with real
-         * Docker/Kubernetes-style virtual networking present (this project's own dev machine has
-         * a dozen `br-*`/`docker0` bridge interfaces alongside its two real LAN ones), it produced
-         * a `.smpk`-irrelevant but very real failure -- the desktop's advertisement carried no
-         * usable IPv4 address at all, only an IPv6 link-local one JmDNS's own resolution didn't
-         * attach a working network-interface scope to, so a phone trying to pair got `connect()
-         * failed: EINVAL` on every attempt. [preferredLanAddress] sidesteps needing the platform's
-         * own guess to be right at all.
+         * The default guess is not reliable enough to trust as-is: on real hardware, with
+         * Docker-style virtual networking present (this project's own dev machine has a dozen
+         * `br-*`/`docker0` bridges alongside its two real LAN interfaces), it produced an
+         * advertisement carrying only an IPv6 link-local address without a usable scope, so a
+         * phone trying to pair got `connect() failed: EINVAL` on every attempt.
          */
-        fun create(): JmDnsSyncDiscovery =
-            JmDnsSyncDiscovery(
-                (parseAddressOverride(System.getenv(ADDRESS_OVERRIDE_ENV)) ?: preferredLanAddress())?.let { JmDNS.create(it) }
-                    ?: JmDNS.create(),
-            )
+        fun create(): JmDnsSyncDiscovery {
+            val addresses = parseAddressOverride(System.getenv(ADDRESS_OVERRIDE_ENV))?.let(::listOf) ?: lanAddresses()
+            val responders =
+                addresses.mapNotNull { address ->
+                    try {
+                        JmDNS.create(address)
+                    } catch (e: IOException) {
+                        null
+                    }
+                }
+            return JmDnsSyncDiscovery(responders.ifEmpty { listOf(JmDNS.create()) })
+        }
 
         /**
-         * Name of the environment variable that forces the interface address mDNS binds to,
-         * bypassing [preferredLanAddress]'s guess -- for machines with several real interfaces, and
-         * for testing against an emulator on a private virtual bridge, where the "right" interface
-         * is one no heuristic could know about.
+         * Name of the environment variable that restricts mDNS to one interface address, bypassing
+         * [lanAddresses] -- for testing against an emulator on a private virtual bridge, or for
+         * pinning discovery to one interface when diagnosing a network.
          */
         const val ADDRESS_OVERRIDE_ENV = "INKSTAVE_MDNS_ADDRESS"
 
@@ -126,31 +154,56 @@ class JmDnsSyncDiscovery private constructor(
         }
 
         /**
-         * The first real, LAN-routable IPv4 address this device has, or `null` if none is found
-         * (falls back to the platform default in [create]) -- deliberately excludes loopback,
-         * link-local, and interfaces whose name matches common virtual/container-networking
-         * patterns (`docker`, `br-`, `veth`, `virbr`, `vboxnet`, `vmnet`, `tun`, `tap`): a name
-         * -based heuristic, not a perfect one, but real container/VM networking tooling
-         * overwhelmingly uses these conventions, and a private (RFC 1918) address on one of them is
-         * never going to be the LAN a phone is actually trying to reach this device over.
+         * Every real, LAN-routable IPv4 address this device has: interfaces that are up, support
+         * multicast, aren't loopback, and aren't named like virtual/container networking or
+         * cellular data ([isLikelyVirtual]); loopback and link-local addresses excluded. A name
+         * heuristic, not a perfect one, but container/VM tooling overwhelmingly uses these
+         * conventions, and a phone is never going to reach this device over one of them.
          */
-        private fun preferredLanAddress(): Inet4Address? =
+        private fun lanAddresses(): List<Inet4Address> =
             NetworkInterface
                 .getNetworkInterfaces()
                 .asSequence()
-                .filter { it.isUp && !it.isLoopback && !isLikelyVirtual(it.name) }
+                .filter { it.isUp && !it.isLoopback && it.supportsMulticast() && !isLikelyVirtual(it.name) }
                 .flatMap { it.inetAddresses.asSequence() }
                 .filterIsInstance<Inet4Address>()
                 .filterNot { it.isLoopbackAddress || it.isLinkLocalAddress }
-                .firstOrNull()
+                .distinct()
+                .toList()
 
+        // rmnet/ccmni are Android cellular-data interfaces: LAN discovery is meaningless on them.
         private val VIRTUAL_INTERFACE_NAME_PREFIXES =
-            listOf("docker", "br-", "veth", "virbr", "vboxnet", "vmnet", "tun", "tap")
+            listOf("docker", "br-", "veth", "virbr", "vboxnet", "vmnet", "tun", "tap", "rmnet", "ccmni", "dummy")
 
         private fun isLikelyVirtual(interfaceName: String): Boolean {
             val lower = interfaceName.lowercase()
             return VIRTUAL_INTERFACE_NAME_PREFIXES.any { lower.startsWith(it) }
         }
+    }
+}
+
+/**
+ * Combines the per-responder sightings of one device into a single [DiscoveredDevice] whose
+ * [DiscoveredDevice.hosts] lists every address it has been seen at, in first-seen order. Keyed by
+ * (deviceId, port): the same deviceId on another port is a genuinely different listener (a
+ * desktop's pairing server vs. its sync server) and must stay a separate entry.
+ */
+internal class MergingDeviceListener(
+    private val delegate: SyncDeviceListener,
+) : SyncDeviceListener {
+    private val hostsByListener = HashMap<Pair<String, Int>, LinkedHashSet<String>>()
+
+    @Synchronized
+    override fun onDeviceFound(device: DiscoveredDevice) {
+        val hosts = hostsByListener.getOrPut(device.deviceId to device.port) { LinkedHashSet() }
+        hosts.addAll(device.hosts)
+        delegate.onDeviceFound(device.copy(hosts = hosts.toList()))
+    }
+
+    @Synchronized
+    override fun onDeviceLost(deviceId: String) {
+        hostsByListener.keys.removeAll { it.first == deviceId }
+        delegate.onDeviceLost(deviceId)
     }
 }
 
@@ -194,13 +247,14 @@ private class JmDnsListenerAdapter(
 private fun ServiceInfo.toDiscoveredDevice(): DiscoveredDevice? {
     val deviceId = getPropertyString(PROPERTY_DEVICE_ID) ?: return null
     val host = preferredHostAddress() ?: return null
+    val displayName = getPropertyString(PROPERTY_DISPLAY_NAME)?.takeIf { it.isNotBlank() } ?: name
     val roles =
         getPropertyString(PROPERTY_ROLES)
             ?.split(",")
             ?.filter { it.isNotBlank() }
             ?.toSet()
             .orEmpty()
-    return DiscoveredDevice(deviceId = deviceId, displayName = name, host = host, port = port, roles = roles)
+    return DiscoveredDevice(deviceId = deviceId, displayName = displayName, hosts = listOf(host), port = port, roles = roles)
 }
 
 /**

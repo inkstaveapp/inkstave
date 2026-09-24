@@ -61,8 +61,18 @@ object PairingSession {
     ): PairingOutcome =
         try {
             val sslContext = deviceIdentitySslContext(settingsDirectory, TrustAnyPeerCertificate)
-            (sslContext.socketFactory.createSocket() as SSLSocket).use { socket ->
-                socket.connect(InetSocketAddress(device.host, device.port), connectTimeoutMillis)
+            val connected =
+                firstReachable(device.hosts) { host ->
+                    val attempt = sslContext.socketFactory.createSocket() as SSLSocket
+                    try {
+                        attempt.connect(InetSocketAddress(host, device.port), connectTimeoutMillis)
+                        attempt
+                    } catch (e: IOException) {
+                        attempt.close()
+                        throw e
+                    }
+                }
+            connected.use { socket ->
                 rethrowingSecurityExceptionsAsIO { socket.startHandshake() }
                 writeIdentity(socket, localIdentity)
                 val peerIdentity = readIdentity(socket)

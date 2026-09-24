@@ -3,18 +3,26 @@ package app.inkstave.shared.sync
 /**
  * A device advertised on the local network (`docs/sync-protocol.md`'s "Discovery"), before any
  * trust decision has been made about it -- discovery alone never grants access
- * ("Discovery only lists devices; it does not by itself grant any access"). [host]/[port] are
+ * ("Discovery only lists devices; it does not by itself grant any access"). [hosts]/[port] are
  * where to connect to actually pair with or sync to this device; [roles] mirrors the discovered
  * service's advertised roles (`"capture"`, `"processing"`, or both -- a laptop can be both, per
  * that doc).
+ *
+ * [hosts] is a list because one device is often reachable at several addresses at once (a
+ * desktop with both Ethernet and Wi-Fi advertises on each). It is never empty, in preference
+ * order; callers try each in turn until one is reachable (`firstReachable`).
  */
 data class DiscoveredDevice(
     val deviceId: String,
     val displayName: String,
-    val host: String,
+    val hosts: List<String>,
     val port: Int,
     val roles: Set<String>,
-)
+) {
+    init {
+        require(hosts.isNotEmpty()) { "a discovered device needs at least one address" }
+    }
+}
 
 /** Advertised device roles (`docs/sync-protocol.md`'s discovery TXT record). */
 object DeviceRole {
