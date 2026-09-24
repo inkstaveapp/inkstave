@@ -93,10 +93,9 @@ class AppUiTest {
                     // non-optional) signature here.
                     pedalMapping = PedalKeyMapping.DEFAULT,
                     onPedalMappingChange = {},
-                    // Not what this scenario exercises (that's a future PairingScreen UI test,
-                    // blocked on the same pre-existing compose.uiTest/Skiko issue this whole class
-                    // already is) -- a real identity/trust store are cheap enough to just provision
-                    // for real here, same as this test's real SQLite/LibraryImporter elsewhere.
+                    // Not what this scenario exercises (that's a future PairingScreen UI test) --
+                    // a real identity/trust store are cheap enough to just provision for real
+                    // here, same as this test's real SQLite/LibraryImporter elsewhere.
                     syncSettingsDirectory = syncDir,
                     localIdentity = getOrCreateDeviceIdentity(syncDir),
                     peerTrustStore = PeerTrustStore(File(syncDir, "trusted-peers.json")),

@@ -15,15 +15,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Real simulated-UI coverage for [PedalSettingsScreen] (`ROADMAP.md` M3) --
- * same honest status as [AppUiTest]: written against the actual composable
- * via `runComposeUiTest`, real clicks and real simulated key input, but
- * **not observed to pass in this session** for the same reason `AppUiTest`
- * isn't -- see `client/README.md`'s "Known rough edges" and
- * `ROADMAP.md`'s M1 entry for the `compose.uiTest` dependency-resolution
- * issue specific to this sandboxed environment. Confirmed to script
- * -compile correctly; run `./gradlew :shared:desktopTest` with working
- * network access to observe it actually pass.
+ * Real simulated-UI coverage for [PedalSettingsScreen] (`ROADMAP.md` M3): the actual composable
+ * driven via `runComposeUiTest`, with real clicks and simulated key input. These tests caught the
+ * Reset/Back buttons being laid out off-screen the first time they could actually run.
  */
 @OptIn(ExperimentalTestApi::class)
 class PedalSettingsUiTest {

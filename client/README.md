@@ -154,20 +154,14 @@ a comment at its call site, not just noted here:
   artifacts) resolved and `:androidApp:assembleDebug`/
   `:androidApp:testDebugUnitTest` both passed for real, and in the same
   session, `compose.uiTest` *also* finally resolved -- see the next point.
-- **`compose.uiTest` now resolves, and `ui/AppUiTest.kt`/`ui/PedalSettingsUiTest.kt`
-  now compile -- but fail at runtime with `org.jetbrains.skiko.LibraryLoadException`,
-  a different, more specific problem than the resolution issue above.**
-  Compiling them for the first time also surfaced a real, unrelated latent
-  bug: `AppUiTest.kt` (M1) had never been updated for M3's
-  `pedalMapping`/`onPedalMappingChange` parameters on `App()`, since nothing
-  had ever compiled it to notice -- fixed alongside this finding (see
-  `ROADMAP.md`'s M4 entry). The remaining `LibraryLoadException` is a native
-  Skia library loading failure in this specific sandboxed environment (most
-  likely a missing system library `Skiko`'s headless renderer needs, e.g.
-  fontconfig/Mesa -- not diagnosed further here, out of scope for the pass
-  that found it). Run `./gradlew :shared:desktopTest` in an environment with
-  a normal desktop graphics stack to check whether this reproduces there; if
-  it doesn't, it's specific to this sandbox, not the test code.
+- **The Compose UI tests (`ui/AppUiTest.kt`, `ui/PedalSettingsUiTest.kt`) run
+  and pass.** They failed for a long time with
+  `org.jetbrains.skiko.LibraryLoadException` ("Cannot find
+  libskiko-linux-x64.so.sha256"), first suspected to be a missing system
+  graphics library. It was a classpath gap: `compose.uiTest` doesn't bring
+  Skiko's native renderer, so `desktopTest` now also depends on
+  `compose.desktop.currentOs`. Once they ran, they caught a real bug:
+  Pedal Settings' Reset/Back buttons were laid out off-screen.
 
 None of these are permanent -- they're the actual state of the Kotlin/AGP/
 Compose ecosystem transition happening right as this was scaffolded, and

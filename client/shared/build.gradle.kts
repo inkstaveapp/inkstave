@@ -121,6 +121,11 @@ kotlin {
                 // rough edges" and ROADMAP.md's M1 entry.
                 @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
                 implementation(compose.uiTest)
+                // Skiko's native renderer for the host OS. compose.uiTest doesn't pull it
+                // in, and without it every UI test failed with LibraryLoadException
+                // "Cannot find libskiko-linux-x64.so.sha256" -- a classpath gap, not a
+                // missing system graphics library as first suspected.
+                implementation(compose.desktop.currentOs)
             }
         }
     }

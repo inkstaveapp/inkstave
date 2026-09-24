@@ -105,7 +105,10 @@ fun PedalSettingsScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 12.dp)) {
+            // weight(1f), not fillMaxSize(): fillMaxSize made the list claim all remaining
+            // height, pushing the capture prompt and the Reset/Back row off-screen -- on a
+            // real tablet there was no way to leave this screen except the system back gesture.
+            LazyColumn(modifier = Modifier.weight(1f).padding(top = 12.dp)) {
                 items(PedalAction.entries) { action ->
                     PedalActionRow(
                         action = action,
