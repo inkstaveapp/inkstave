@@ -1,3 +1,5 @@
+import java.time.Duration
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
@@ -190,4 +192,15 @@ run {
 
     registerCrossLangTask("crossLangManifestWrite", "write")
     registerCrossLangTask("crossLangManifestRead", "read")
+}
+
+// Print each test as it starts and finishes, and bound the whole run: on CI a
+// hung test otherwise shows nothing (Gradle only reports failures) and holds the
+// job until GitHub's 6-hour limit.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("started", "passed", "failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.SHORT
+    }
+    timeout.set(Duration.ofMinutes(15))
 }
