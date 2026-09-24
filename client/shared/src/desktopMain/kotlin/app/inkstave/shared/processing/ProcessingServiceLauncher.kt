@@ -63,11 +63,19 @@ object ProcessingServiceLauncher {
 
         val pythonExecutable = File(serviceDirectory, ".venv/bin/python")
         try {
-            ProcessBuilder(pythonExecutable.absolutePath, "-m", "inkstave_processing.server")
-                .directory(serviceDirectory)
-                .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start()
+            // Output goes to a log file, not Redirect.INHERIT: an inherited stdout/stderr is held
+            // open by the child, and on CI that kept Gradle waiting on the finished test worker's
+            // output forever (every test passed, the job never ended). The shutdown hook stops the
+            // service with the JVM that started it, instead of leaving an orphan behind.
+            val logFile = File(System.getProperty("java.io.tmpdir"), LOG_FILE_NAME)
+            val process =
+                ProcessBuilder(pythonExecutable.absolutePath, "-m", "inkstave_processing.server")
+                    .directory(serviceDirectory)
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+                    .start()
+            Runtime.getRuntime().addShutdownHook(Thread { process.destroy() })
+            System.err.println("inkstave: started processing-service (log: $logFile)")
         } catch (e: IOException) {
             System.err.println("inkstave: failed to launch processing-service from $serviceDirectory: ${e.message}")
             return
@@ -105,6 +113,7 @@ object ProcessingServiceLauncher {
         )
     }
 
+    private const val LOG_FILE_NAME = "inkstave-processing-service.log"
     private const val DEFAULT_POLL_TIMEOUT_MILLIS = 15_000L
     private const val POLL_INTERVAL_MILLIS = 500L
 }
