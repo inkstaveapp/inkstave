@@ -13,11 +13,24 @@ jobs:
     name: Kotlin (client/)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Tesseract OCR
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+      # The desktop integration tests start the real processing service, which
+      # ProcessingServiceLauncher looks for at processing-service/.venv.
+      - name: Set up processing-service/.venv
+        working-directory: processing-service
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ../format/python
+          .venv/bin/pip install -e .
       - name: Accept Android SDK licenses
         run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
       - name: ktlintCheck
@@ -37,8 +50,8 @@ jobs:
     name: Python (format/python, processing-service)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install format/python
@@ -52,6 +65,8 @@ jobs:
           .venv/bin/ruff check .
           .venv/bin/mypy src/inkstave_format tests
           .venv/bin/python -m pytest -q
+      - name: Install Tesseract OCR
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
       - name: Install processing-service (depends on format/python)
         working-directory: processing-service
         run: |
@@ -76,12 +91,12 @@ jobs:
     # fields included -- by the other (docs/testing-strategy.md).
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Accept Android SDK licenses
