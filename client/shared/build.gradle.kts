@@ -11,7 +11,7 @@ plugins {
 }
 
 ktlint {
-    version.set("1.3.1")
+    version.set(libs.versions.ktlint)
     // SQLDelight generates Kotlin sources into build/generated/sqldelight
     // and adds that directory to commonMain -- exclude it, it's build
     // output, not code this project owns or should lint/format.
@@ -23,19 +23,30 @@ ktlint {
 kotlin {
     android {
         namespace = "app.inkstave.shared"
-        // 37: Compose Multiplatform 1.12.1's Android artifacts require compileSdk 37+.
-        compileSdk = 37
-        minSdk = 26
+        compileSdk =
+            libs.versions.androidCompileSdk
+                .get()
+                .toInt()
+        minSdk =
+            libs.versions.androidMinSdk
+                .get()
+                .toInt()
         // Runs commonTest on the Android JVM too (host tests, no device needed).
         withHostTest {}
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget
+                    .fromTarget(libs.versions.jvmTarget.get()),
+            )
         }
     }
 
     jvm("desktop") {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget
+                    .fromTarget(libs.versions.jvmTarget.get()),
+            )
         }
     }
 

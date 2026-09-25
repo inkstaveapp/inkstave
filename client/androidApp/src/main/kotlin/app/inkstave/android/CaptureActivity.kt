@@ -131,13 +131,20 @@ private fun CaptureScreen(
         }
 
     when (captureUiState(hasCameraHardware, permissionGranted)) {
-        CaptureUiState.NoCameraHardware -> NoCameraMessage(onCancel)
-        CaptureUiState.PermissionNeeded ->
+        CaptureUiState.NoCameraHardware -> {
+            NoCameraMessage(onCancel)
+        }
+
+        CaptureUiState.PermissionNeeded -> {
             PermissionRationale(
                 onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 onCancel = onCancel,
             )
-        CaptureUiState.Ready -> CameraCaptureContent(onFinish = onFinish, onCancel = onCancel)
+        }
+
+        CaptureUiState.Ready -> {
+            CameraCaptureContent(onFinish = onFinish, onCancel = onCancel)
+        }
     }
 }
 

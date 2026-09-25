@@ -8,7 +8,21 @@ plugins {
 }
 
 ktlint {
-    version.set("1.3.1")
+    version.set(libs.versions.ktlint)
+}
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+    targetCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget
+                .fromTarget(libs.versions.jvmTarget.get()),
+        )
+    }
 }
 
 dependencies {

@@ -94,7 +94,7 @@ fun App(
 
     MaterialTheme {
         when (val current = screen) {
-            is Screen.Library ->
+            is Screen.Library -> {
                 LibraryScreen(
                     index = libraryIndex,
                     importer = importer,
@@ -107,21 +107,27 @@ fun App(
                     onOpenPedalSettings = { screen = Screen.PedalSettings },
                     onOpenPairing = { screen = Screen.Pairing },
                 )
-            is Screen.Viewer ->
+            }
+
+            is Screen.Viewer -> {
                 ViewerScreen(
                     filePath = current.filePath,
                     pedalMapping = pedalMapping,
                     onBack = { screen = Screen.Library },
                     onRawKeyHandlerChange = onRawKeyHandlerChange,
                 )
-            is Screen.PedalSettings ->
+            }
+
+            is Screen.PedalSettings -> {
                 PedalSettingsScreen(
                     mapping = pedalMapping,
                     onMappingChange = onPedalMappingChange,
                     onBack = { screen = Screen.Library },
                     onRawKeyHandlerChange = onRawKeyHandlerChange,
                 )
-            is Screen.Pairing ->
+            }
+
+            is Screen.Pairing -> {
                 PairingScreen(
                     settingsDirectory = syncSettingsDirectory,
                     localIdentity = localIdentity,
@@ -129,6 +135,7 @@ fun App(
                     onBack = { screen = Screen.Library },
                     acquireMulticastLock = acquireMulticastLock,
                 )
+            }
         }
     }
 }

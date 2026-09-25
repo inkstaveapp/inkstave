@@ -255,7 +255,10 @@ fun ViewerScreen(
                             onBack()
                             true
                         }
-                        else -> pedalMapping.actionFor(event.key)?.let { action -> handlePedalAction(action) } ?: false
+
+                        else -> {
+                            pedalMapping.actionFor(event.key)?.let { action -> handlePedalAction(action) } ?: false
+                        }
                     }
                 },
     ) {

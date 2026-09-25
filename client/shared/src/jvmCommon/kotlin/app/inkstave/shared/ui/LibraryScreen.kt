@@ -169,11 +169,17 @@ fun LibraryScreen(
             statusMessage = "Sending to ${peer.displayName}..."
             val outcome = withContext(Dispatchers.IO) { send(peer, "Untitled", captured.map { it.bytes }) }
             when (outcome) {
-                is CaptureSessionSendOutcome.Sent -> statusMessage = "Sent to ${peer.displayName}"
-                is CaptureSessionSendOutcome.PeerNotFound ->
+                is CaptureSessionSendOutcome.Sent -> {
+                    statusMessage = "Sent to ${peer.displayName}"
+                }
+
+                is CaptureSessionSendOutcome.PeerNotFound -> {
                     statusMessage = "${peer.displayName} wasn't found on the network -- is it running? Importing locally instead."
-                is CaptureSessionSendOutcome.Failed ->
+                }
+
+                is CaptureSessionSendOutcome.Failed -> {
                     statusMessage = "Couldn't send to ${peer.displayName} (${outcome.reason}) -- importing locally instead."
+                }
             }
             // Both failure outcomes above fall back to local import, same "never lose a just
             // -captured batch" reasoning as dismissing the dialog outright -- only a confirmed Sent

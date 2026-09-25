@@ -6,7 +6,7 @@ plugins {
 }
 
 ktlint {
-    version.set("1.3.1")
+    version.set(libs.versions.ktlint)
 }
 
 android {
@@ -15,25 +15,37 @@ android {
     // artifacts require it -- see the libs.versions.toml comment on `agp`)
     // and minSdk 26 (Android 8.0), required for the Bluetooth LE / USB HID
     // APIs the pedal-input work in M3 (ROADMAP.md) will need.
-    compileSdk = 37
+    compileSdk =
+        libs.versions.androidCompileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
         applicationId = "app.inkstave.android"
-        minSdk = 26
-        targetSdk = 37
+        minSdk =
+            libs.versions.androidMinSdk
+                .get()
+                .toInt()
+        targetSdk =
+            libs.versions.androidTargetSdk
+                .get()
+                .toInt()
         versionCode = 1
         versionName = "0.1.0-dev"
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
     }
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget
+                .fromTarget(libs.versions.jvmTarget.get()),
+        )
     }
 }
 

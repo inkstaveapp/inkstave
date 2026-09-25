@@ -37,7 +37,7 @@ class AnnotationSpatialIndexPerformanceTest {
         val random = Random(42)
         return (0 until count).map { i ->
             when (i % 4) {
-                0 ->
+                0 -> {
                     AnnotationItem.StampItem(
                         Stamp(
                             id = "stamp-$i",
@@ -48,6 +48,8 @@ class AnnotationSpatialIndexPerformanceTest {
                             rotationDeg = 0.0,
                         ),
                     )
+                }
+
                 1 -> {
                     val x = random.nextDouble(1000.0)
                     val y = random.nextDouble(1000.0)
@@ -55,6 +57,7 @@ class AnnotationSpatialIndexPerformanceTest {
                         Highlight(id = "highlight-$i", rectPt = listOf(x, y, x + 20.0, y + 10.0), color = "#FFFF0080"),
                     )
                 }
+
                 2 -> {
                     val x = random.nextDouble(1000.0)
                     val y = random.nextDouble(1000.0)
@@ -67,7 +70,8 @@ class AnnotationSpatialIndexPerformanceTest {
                         ),
                     )
                 }
-                else ->
+
+                else -> {
                     AnnotationItem.TextNoteItem(
                         TextNote(
                             id = "text-$i",
@@ -77,6 +81,7 @@ class AnnotationSpatialIndexPerformanceTest {
                             fontSizePt = 8.0,
                         ),
                     )
+                }
             }
         }
     }

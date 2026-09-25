@@ -117,10 +117,13 @@ private fun startSyncListener(
             try {
                 server.acceptOne().use { connection ->
                     when (val outcome = CaptureSessionReceiver.receiveAndImport(connection, importer, processingClient)) {
-                        is CaptureSessionImportOutcome.Processed ->
+                        is CaptureSessionImportOutcome.Processed -> {
                             println("inkstave: capture session imported and processed: '${outcome.manifest.title}'")
-                        is CaptureSessionImportOutcome.ImportedRaw ->
+                        }
+
+                        is CaptureSessionImportOutcome.ImportedRaw -> {
                             println("inkstave: capture session imported raw (${outcome.reason}): '${outcome.manifest.title}'")
+                        }
                     }
                 }
             } catch (e: IOException) {

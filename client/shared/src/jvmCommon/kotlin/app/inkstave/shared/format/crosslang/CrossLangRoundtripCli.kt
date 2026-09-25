@@ -63,6 +63,7 @@ fun main(args: Array<String>) {
             File(targetPath).writeText(ManifestJson.encode(fixture))
             println("[kotlin] wrote $targetPath from fixture $fixturePath")
         }
+
         "read" -> {
             val expected = ManifestJson.decode(File(fixturePath).readText())
             val actual = ManifestJson.decode(File(targetPath).readText())
@@ -75,6 +76,7 @@ fun main(args: Array<String>) {
                 exitProcess(1)
             }
         }
+
         else -> {
             System.err.println(
                 "usage: <write|read> (CROSS_LANG_FIXTURE_PATH and CROSS_LANG_TARGET_PATH env vars required)",

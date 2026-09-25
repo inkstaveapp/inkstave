@@ -79,11 +79,15 @@ object CaptureSessionReceiver {
                     check(message.sessionId == start.sessionId) { "received a photo for a different session" }
                     photosBySequence[message.sequenceIndex] = message.bytes
                 }
+
                 is CaptureSessionMessage.SessionEnd -> {
                     check(message.sessionId == start.sessionId) { "received a session-end for a different session" }
                     break
                 }
-                is CaptureSessionMessage.SessionStart -> error("received a second SessionStart mid-session")
+
+                is CaptureSessionMessage.SessionStart -> {
+                    error("received a second SessionStart mid-session")
+                }
             }
         }
         val photos = photosBySequence.values.toList()

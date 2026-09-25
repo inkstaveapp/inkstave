@@ -244,8 +244,11 @@ private fun Modifier.pointerInputForMode(
     onSelectDragEnd: () -> Unit,
 ): Modifier =
     when (mode) {
-        AnnotationMode.VIEW -> this
-        AnnotationMode.PEN ->
+        AnnotationMode.VIEW -> {
+            this
+        }
+
+        AnnotationMode.PEN -> {
             pointerInput(mode) {
                 detectDragGestures(
                     onDragStart = onPenDragStart,
@@ -253,7 +256,9 @@ private fun Modifier.pointerInputForMode(
                     onDragEnd = onPenDragEnd,
                 )
             }
-        AnnotationMode.HIGHLIGHT ->
+        }
+
+        AnnotationMode.HIGHLIGHT -> {
             pointerInput(mode) {
                 var start = Offset.Zero
                 detectDragGestures(
@@ -265,9 +270,17 @@ private fun Modifier.pointerInputForMode(
                     onDragEnd = onHighlightDragEnd,
                 )
             }
-        AnnotationMode.STAMP -> pointerInput(mode) { detectTapGestures(onTap = onStampTap) }
-        AnnotationMode.TEXT -> pointerInput(mode) { detectTapGestures(onTap = onTextTap) }
-        AnnotationMode.SELECT ->
+        }
+
+        AnnotationMode.STAMP -> {
+            pointerInput(mode) { detectTapGestures(onTap = onStampTap) }
+        }
+
+        AnnotationMode.TEXT -> {
+            pointerInput(mode) { detectTapGestures(onTap = onTextTap) }
+        }
+
+        AnnotationMode.SELECT -> {
             pointerInput(mode) {
                 detectDragGestures(
                     onDragStart = onSelectDragStart,
@@ -275,6 +288,7 @@ private fun Modifier.pointerInputForMode(
                     onDragEnd = onSelectDragEnd,
                 )
             }
+        }
     }
 
 /** Returns [layer] with the item identified by [itemId] moved by ([dxPt], [dyPt]) in page-point space -- a stamp/text note's x/y, or a highlight's whole rect, shifted by that delta. Strokes aren't repositionable in M2 (see `AnnotationOverlay`'s module doc); if [itemId] names one, [layer] is returned unchanged. */
@@ -350,6 +364,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationItem(
                         .Size(bottomRight.x - topLeft.x, bottomRight.y - topLeft.y),
             )
         }
+
         is AnnotationItem.StrokeItem -> {
             val pixelPoints = item.stroke.points.map { toPixel(it[0], it[1]) }
             if (pixelPoints.size >= 2) {
@@ -365,7 +380,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationItem(
                 )
             }
         }
-        is AnnotationItem.StampItem -> drawStamp(item.stamp, toPixel, textMeasurer)
+
+        is AnnotationItem.StampItem -> {
+            drawStamp(item.stamp, toPixel, textMeasurer)
+        }
+
         is AnnotationItem.TextNoteItem -> {
             val topLeft = toPixel(item.textNote.x, item.textNote.y)
             // fontSizePt is page-point space (same unit as everything else in the layer) --
@@ -414,11 +433,16 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStamp(
             )
             drawCircle(color = Color.Black, radius = extentPx * 0.12f, center = Offset(center.x, center.y - extentPx * 0.4f))
         }
+
         "accent" -> {
             drawLine(Color.Black, Offset(center.x - extentPx, center.y), Offset(center.x, center.y - extentPx * 0.6f), strokeWidth = 3f)
             drawLine(Color.Black, Offset(center.x, center.y - extentPx * 0.6f), Offset(center.x + extentPx, center.y), strokeWidth = 3f)
         }
-        "staccato" -> drawCircle(color = Color.Black, radius = extentPx * 0.25f, center = center)
+
+        "staccato" -> {
+            drawCircle(color = Color.Black, radius = extentPx * 0.25f, center = center)
+        }
+
         "repeat" -> {
             drawLine(Color.Black, Offset(center.x, center.y - extentPx), Offset(center.x, center.y + extentPx), strokeWidth = 4f)
             drawCircle(
@@ -440,6 +464,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStamp(
                     ),
             )
         }
+
         // "forte"/"piano", and anything unrecognised: a plain drawn letter -- ordinary
         // Latin letters are in the Basic Multilingual Plane, universally renderable by
         // any default font, no glyph-availability risk (see STAMP_PALETTE's doc).
@@ -461,20 +486,26 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStamp(
 private fun parseHexColor(hex: String): Color {
     val clean = hex.removePrefix("#")
     return when (clean.length) {
-        6 ->
+        6 -> {
             Color(
                 red = clean.substring(0, 2).toInt(16) / 255f,
                 green = clean.substring(2, 4).toInt(16) / 255f,
                 blue = clean.substring(4, 6).toInt(16) / 255f,
                 alpha = 1f,
             )
-        8 ->
+        }
+
+        8 -> {
             Color(
                 red = clean.substring(0, 2).toInt(16) / 255f,
                 green = clean.substring(2, 4).toInt(16) / 255f,
                 blue = clean.substring(4, 6).toInt(16) / 255f,
                 alpha = clean.substring(6, 8).toInt(16) / 255f,
             )
-        else -> Color.Black
+        }
+
+        else -> {
+            Color.Black
+        }
     }
 }

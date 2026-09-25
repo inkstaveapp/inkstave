@@ -28,6 +28,7 @@ object CaptureSessionWire {
                 data.writeUTF(message.sessionId)
                 data.writeUTF(message.scoreTitle)
             }
+
             is CaptureSessionMessage.Photo -> {
                 data.writeByte(TYPE_PHOTO.toInt())
                 data.writeUTF(message.sessionId)
@@ -35,6 +36,7 @@ object CaptureSessionWire {
                 data.writeInt(message.bytes.size)
                 data.write(message.bytes)
             }
+
             is CaptureSessionMessage.SessionEnd -> {
                 data.writeByte(TYPE_SESSION_END.toInt())
                 data.writeUTF(message.sessionId)
@@ -46,7 +48,10 @@ object CaptureSessionWire {
     fun decode(bytes: ByteArray): CaptureSessionMessage {
         val data = DataInputStream(ByteArrayInputStream(bytes))
         return when (val type = data.readByte()) {
-            TYPE_SESSION_START -> CaptureSessionMessage.SessionStart(sessionId = data.readUTF(), scoreTitle = data.readUTF())
+            TYPE_SESSION_START -> {
+                CaptureSessionMessage.SessionStart(sessionId = data.readUTF(), scoreTitle = data.readUTF())
+            }
+
             TYPE_PHOTO -> {
                 val sessionId = data.readUTF()
                 val sequenceIndex = data.readInt()
@@ -54,8 +59,14 @@ object CaptureSessionWire {
                 data.readFully(photoBytes)
                 CaptureSessionMessage.Photo(sessionId, sequenceIndex, photoBytes)
             }
-            TYPE_SESSION_END -> CaptureSessionMessage.SessionEnd(sessionId = data.readUTF())
-            else -> error("unknown CaptureSessionMessage wire type $type")
+
+            TYPE_SESSION_END -> {
+                CaptureSessionMessage.SessionEnd(sessionId = data.readUTF())
+            }
+
+            else -> {
+                error("unknown CaptureSessionMessage wire type $type")
+            }
         }
     }
 }

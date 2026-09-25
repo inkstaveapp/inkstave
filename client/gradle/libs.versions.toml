@@ -1,16 +1,14 @@
 [versions]
-# Kotlin 2.2.20 is the version Compose Multiplatform 1.12.1 explicitly
-# recommends (https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html).
-#
-# AGP 9.1.1 rather than the Kotlin Multiplatform plugin's own documented
-# "up to 8.11.1" range (https://kotlinlang.org/docs/multiplatform/multiplatform-compatibility-guide.html):
-# every current Compose Multiplatform release's Android artifacts (as far
-# back as 1.9.0) require AGP 9.1+ and compileSdk 37 -- confirmed empirically
-# here (`androidx.compose.*:1.12.1 requires Android Gradle plugin 9.1.0 or
-# higher`), so staying on AGP 8.x to match KMP's documented range isn't
-# actually an option if the client uses a current Compose Multiplatform.
-# AGP 9.1.1 is the minimum version satisfying that Compose requirement, to
-# minimise how far ahead of Kotlin's documented range this build sits.
+# Build-wide settings, read by every module's build script.
+jvmTarget = "17"
+androidCompileSdk = "37"
+androidTargetSdk = "37"
+androidMinSdk = "26"
+ktlint = "1.8.0"
+
+# Kotlin 2.2.20 is what Compose Multiplatform 1.12.1 recommends. AGP is ahead of
+# the Kotlin Multiplatform plugin's documented range because Compose
+# Multiplatform's Android artifacts need AGP 9.1+ and compileSdk 37.
 kotlin = "2.2.20"
 agp = "9.4.0"
 composeMultiplatform = "1.12.1"
