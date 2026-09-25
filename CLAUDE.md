@@ -104,8 +104,9 @@ relevant domain context and constraints:
   gets a real doc comment (KDoc/docstring) explaining purpose and non-obvious
   behavior — not a restated signature. Every doc in `docs/` that describes
   behavior you just changed gets updated in the same change. Undocumented
-  public API or a stale doc is incomplete work, not a follow-up. See
-  `docs/coding-standards.md`.
+  public API or a stale doc is incomplete work, not a follow-up. Keep
+  comments to the purpose and the reason; the history of how something was
+  found or fixed goes in the commit message. See `docs/coding-standards.md`.
 - **If it should be tested, it is tested.** Every functional scenario —
   unit, integration, end-to-end, or spec/contract level, whichever is
   cheapest and still catches the regression — gets a test as part of

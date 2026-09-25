@@ -60,6 +60,13 @@ Both layers are required; neither substitutes for the other.
   test is: would a reader who didn't write this line be surprised by its
   behavior, or need to read the implementation to trust it? If yes, it
   needs one.
+- **Keep comments to what the code is and why, not how it came to be.**
+  State the constraint or reason in a sentence or two ("prefers IPv4: bare
+  IPv6 link-local addresses have no scope id and aren't routable"). The
+  story of how a bug was found, which session or milestone it was, and what
+  was tried first belongs in the commit message, where it already is. A
+  comment that would stop being true, or stop mattering, after the next
+  commit is history, not documentation.
 
 ## Performance
 
