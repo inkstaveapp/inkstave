@@ -113,9 +113,7 @@ python -m venv .venv
 ```
 
 **Setting up one IDE for this, `format/python`, and `client/` all at
-once?** See `../docs/ide-setup.md` -- a single shared venv at the repo
-root (rather than this directory's own `.venv`) is what makes that work
-cleanly in IntelliJ IDEA Ultimate.
+once?** See `../docs/ide-setup.md`.
 
 ## Running
 

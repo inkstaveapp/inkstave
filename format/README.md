@@ -50,9 +50,7 @@ python -m venv .venv
 (see `../processing-service/README.md`) -- it's not published anywhere.
 
 **Setting up one IDE for both Python packages (and `client/`) at once?**
-See `../docs/ide-setup.md` -- a single shared venv at the repo root
-works for `format/python` and `processing-service` together, instead of
-the two separate ones below.
+See `../docs/ide-setup.md`.
 
 ## Cross-language round-trip check
 
