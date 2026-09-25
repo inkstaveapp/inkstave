@@ -1,5 +1,4 @@
 plugins {
-    alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeMultiplatform)
@@ -47,8 +46,8 @@ dependencies {
     // needed them directly before CaptureActivity.kt: MainActivity/DocumentPicker only ever
     // consumed the shared App composable and androidx.activity.compose's setContent, never
     // Compose Foundation/Material3 symbols themselves.
-    implementation(compose.foundation)
-    implementation(compose.material3)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
     // suspendCancellableCoroutine, bridging the SAF picker's callback-based
     // ActivityResultLauncher API into the suspend PickedFile picker functions
     // app.inkstave.shared.ui.App expects -- see DocumentPicker.kt.
@@ -64,5 +63,5 @@ dependencies {
     // framework needed -- see those files' own docs). This module had no src/test before M4, so
     // kotlin-test was never declared here; :shared's equivalent test source sets declare it the
     // same way (see shared/build.gradle.kts).
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit"))
 }

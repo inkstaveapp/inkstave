@@ -35,6 +35,7 @@
 // currently-unresolved friction point in the Gradle/AGP 9 ecosystem as of
 // this scaffolding (September 2026) -- revisit whether this override is
 // still necessary next time these versions are bumped.
+
 buildscript {
     configurations.classpath {
         resolutionStrategy {
@@ -45,13 +46,12 @@ buildscript {
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform) apply false
-    alias(libs.plugins.kotlinAndroid) apply false
     alias(libs.plugins.kotlinJvm) apply false
     alias(libs.plugins.kotlinSerialization) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.androidApplication) apply false
-    alias(libs.plugins.androidLibrary) apply false
+    alias(libs.plugins.androidKotlinMultiplatformLibrary) apply false
     alias(libs.plugins.sqldelight) apply false
     alias(libs.plugins.ktlint) apply false
 }

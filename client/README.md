@@ -87,7 +87,7 @@ what guarantees the result compares equal to constants like
 ## Building
 
 ```
-./gradlew :shared:test :shared:desktopTest   # unit + integration tests
+./gradlew :shared:allTests   # unit + integration tests (Android host + desktop)
 ./gradlew :desktopApp:run                     # launch the desktop app
 ./gradlew :androidApp:assembleDebug           # build the Android debug APK
 ./gradlew ktlintCheck                         # lint (ktlintFormat to auto-fix)

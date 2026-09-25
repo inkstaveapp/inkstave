@@ -39,7 +39,7 @@ jobs:
         run: ./gradlew ktlintCheck --console=plain
       - name: Unit + desktop tests
         working-directory: client
-        run: ./gradlew :shared:test :shared:desktopTest --console=plain
+        run: ./gradlew :shared:allTests --console=plain
       - name: Build desktop app
         working-directory: client
         run: ./gradlew :desktopApp:build --console=plain
