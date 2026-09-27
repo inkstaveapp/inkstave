@@ -15,10 +15,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Tests the desktop [renderPdfPages]/[decodeImagePage] implementations
- * against real PDFBox/ImageIO output -- per `docs/testing-strategy.md`,
- * generating the PDF fixture programmatically rather than committing a
- * binary file.
+ * Desktop [renderPdfPages]/[decodeImagePage] against real PDFBox/ImageIO output, with the PDF
+ * fixture generated in-test rather than committed.
  */
 class PlatformImportDesktopTest {
     private fun samplePdfBytes(pageCount: Int): ByteArray {
@@ -46,8 +44,7 @@ class PlatformImportDesktopTest {
 
         assertEquals(3, pages.size)
         pages.forEach { page ->
-            // A4 at PAGE_RENDER_DPI should render to several hundred pixels per side --
-            // sanity-checking against an unreasonably small/degenerate raster.
+            // A4 at PAGE_RENDER_DPI should be several hundred pixels per side.
             assertTrue(page.width > 100 && page.height > 100, "page too small: ${page.width}x${page.height}")
             assertTrue(page.pngBytes.isNotEmpty())
         }

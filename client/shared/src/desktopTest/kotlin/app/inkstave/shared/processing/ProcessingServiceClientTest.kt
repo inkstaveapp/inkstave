@@ -13,17 +13,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Proves [ProcessingServiceClient] actually talks to a real, running `processing-service` over
- * real HTTP -- the one part of the whole M4 arc that had never been exercised Kotlin-calling
- * -real-Python before this pass (every prior `processing-service` test drove it from Python via
- * `TestClient`; every prior client-side sync test proved Kotlin-to-Kotlin over a real socket, but
- * never Kotlin-to-Python). [ProcessingServiceLauncher] (the same production code
- * [app.inkstave.desktop.Main]'s `main()` calls, not a separate test-only launcher) finds and
- * starts the real service from this repo's own `processing-service/` checkout -- if that's not
- * set up in whatever environment runs this test (its `.venv`, per `processing-service/README.md`'s
- * "Setup"), every test here fails loudly with a clear "processing-service never became healthy"
- * message rather than silently skipping, which is the honest state of things: this really does
- * require the real service to be set up to prove what it proves.
+ * Kotlin-to-Python check: [ProcessingServiceClient] against the real `processing-service`, started by
+ * the production [ProcessingServiceLauncher]. Needs `processing-service/.venv` set up; without it every
+ * test fails with "never became healthy" rather than skipping.
  */
 class ProcessingServiceClientTest {
     private lateinit var client: ProcessingServiceClient
@@ -45,19 +37,12 @@ class ProcessingServiceClientTest {
 
     @AfterTest
     fun tearDown() {
-        // ProcessingServiceLauncher intentionally doesn't hand back a Process reference (it's
-        // fire-and-forget by design -- see its own doc), so this test can't precisely target-kill
-        // only the instance it started. Harmless for this test's own purposes (the process outlives
-        // this JVM either way, same as a manually-started `processing-service` would), and every
-        // other desktop test that doesn't need it running is unaffected by it still being up.
+        // The launcher returns no Process handle, so the service keeps running for the other tests;
+        // it is stopped when this JVM exits.
     }
 
-    /** A synthetic "photo": a light rectangular "page" inset on a darker background, with a
-     * visible border and a couple of rule lines -- enough contrast/structure for the real
-     * pipeline's contour-based page detection (`pipeline/geometry.py`) to actually find a page
-     * boundary, unlike a single flat color (which has no edges at all to detect). Same spirit as
-     * `processing-service/tests/pipeline/fixtures.py`'s own synthetic fixtures, reimplemented
-     * here in Kotlin since this test can't import Python test fixtures directly. */
+    /** A synthetic photo: a light bordered page with rule lines on a darker background, giving the
+     * pipeline's contour detection an edge to find. */
     private fun samplePagePhotoBytes(): ByteArray {
         val canvasSize = 400
         val margin = 40
@@ -77,9 +62,7 @@ class ProcessingServiceClientTest {
         return out.toByteArray()
     }
 
-    /** A genuinely undetectable "photo": one flat color, no edges anywhere for contour detection
-     * to find -- the real negative case `pipeline/geometry.py`'s `_MIN_CONTOUR_AREA_FRACTION`
-     * check (via `PageDetectionFailed`) exists for, not a fabricated error condition. */
+    /** One flat colour with no edges: the real negative case for page detection. */
     private fun blankPhotoBytes(): ByteArray {
         val image = BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB)
         val g = image.createGraphics()
@@ -111,8 +94,7 @@ class ProcessingServiceClientTest {
             "processed page must have real dimensions, got ${response.width}x${response.height}",
         )
         assertTrue(response.decodedImageBytes().isNotEmpty(), "cleaned image bytes must be non-empty")
-        // A real PNG, not just non-empty bytes -- ImageIO.read returning non-null proves this
-        // client's base64 decoding round-tripped the real pipeline's real PNG-encoded output.
+        // A decodable PNG, proving the base64 output round-tripped.
         val decoded = ImageIO.read(java.io.ByteArrayInputStream(response.decodedImageBytes()))
         assertTrue(decoded != null && decoded.width > 0, "decoded cleaned image must be a real, readable PNG")
         assertEquals("coons-boundary-v1", response.processing.dewarpMeshVersion, "real dewarp model version from pipeline/geometry.py")

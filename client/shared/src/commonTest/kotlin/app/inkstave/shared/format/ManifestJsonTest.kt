@@ -7,15 +7,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Unit tests for [ManifestJson] -- the "spec / contract" level test
- * `docs/testing-strategy.md` calls for on `format/`'s field validation and
- * round-trip behaviour.
- */
+/** Contract tests for [ManifestJson]: field validation and round-trip behaviour. */
 class ManifestJsonTest {
-    /** Mirrors `format/fixtures/manifest.v1.json`, with one field this model
-     * doesn't know about (`futureField`) added to prove forward-compatible
-     * preservation actually works, not just that the happy path parses. */
+    /** Mirrors `format/fixtures/manifest.v1.json`, plus an unknown `futureField` to check it is
+     * preserved. */
     private val fixtureWithUnknownField =
         """
         {

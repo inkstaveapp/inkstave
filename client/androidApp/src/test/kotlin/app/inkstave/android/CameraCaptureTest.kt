@@ -9,12 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * [readCapturedFiles] against real temporary files holding synthetic byte content -- the same
- * honest-fixture approach `ImportPipelineTest`/`LibraryImporterEndToEndTest` use for M1's image
- * import, since there's no real captured camera photo to test against either (no camera in this
- * environment, and this function doesn't touch CameraX/Android framework types at all regardless).
- */
+/** [readCapturedFiles] against real temporary files with synthetic content. */
 class CameraCaptureTest {
     private lateinit var directory: File
 

@@ -5,11 +5,8 @@ import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
- * Blocking `JFileChooser`-backed file pickers, matching the SAF-backed
- * ones on Android (`androidApp`'s `DocumentPicker.kt`). Both are part of
- * the JDK -- no new dependency. Called from `Main.kt` wrapped in
- * `withContext(Dispatchers.IO)`, since showing the dialog blocks the
- * calling thread until the user responds.
+ * Blocking `JFileChooser` pickers, the desktop counterpart of Android's `DocumentPicker`. They block
+ * until the user responds, so callers run them on `Dispatchers.IO`.
  */
 object DesktopFilePicker {
     /** Opens a single-PDF file chooser; `null` if the user cancelled. */

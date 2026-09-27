@@ -23,12 +23,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
- * Proves [CaptureSessionReceiver]'s pipeline-integration policy against a **real** running
- * `processing-service`, at the level `docs/testing-strategy.md` calls "the cheapest level that
- * would still catch the regression": a fake, in-memory [SyncConnection] replaying a fixed message
- * sequence, rather than a second real socket -- [CaptureSessionSyncEndToEndTest] already proves
- * the transport itself works end to end; this test's job is proving what happens *after* a session
- * arrives, which doesn't need re-proving the wire underneath it.
+ * [CaptureSessionReceiver]'s processing policy against a real running `processing-service`. Uses an
+ * in-memory [SyncConnection] replaying messages; the transport is covered by
+ * [CaptureSessionSyncEndToEndTest].
  */
 class CaptureSessionProcessingIntegrationTest {
     private lateinit var libraryDirectory: File
@@ -51,8 +48,7 @@ class CaptureSessionProcessingIntegrationTest {
         libraryDirectory.deleteRecursively()
     }
 
-    /** Replays [messages] in order from [receive]; [send] is unused (this receiver-side test never
-     * sends anything back) but implemented to satisfy [SyncConnection] rather than left `TODO`. */
+    /** Replays [messages] in order from [receive]; [send] is unused by the receiver side. */
     private class FakeSyncConnection(
         messages: List<CaptureSessionMessage>,
     ) : SyncConnection {
@@ -106,9 +102,8 @@ class CaptureSessionProcessingIntegrationTest {
         val processed = assertIs<CaptureSessionImportOutcome.Processed>(outcome, "outcome: $outcome")
         assertEquals("Moonlight Sonata", processed.manifest.title)
 
-        // "Really processed," not just "imported" -- read the actual .smpk back and confirm its
-        // page metadata carries the real pipeline's real output, not the null it'd have under raw
-        // import (app.inkstave.shared.importer.ImportPipeline.buildScore's own doc).
+        // Really processed, not just imported: page metadata carries the pipeline's output, which is
+        // null under raw import.
         val libraryRow = index.listAll().single { it.id == processed.manifest.id }
         SmpkReader(File(libraryRow.filePath)).use { reader ->
             val part = reader.readPart(reader.readManifest().parts.single())
@@ -119,11 +114,8 @@ class CaptureSessionProcessingIntegrationTest {
                     assertNotNull(meta.processing, "page $pageId must have real processing metadata, not null (raw-import shape)")
                 assertEquals("coons-boundary-v1", processing.dewarpMeshVersion)
                 assertNotNull(meta.ocr, "page $pageId must have real OCR metadata, not null (raw-import shape)")
-                // Deliberately not asserting aspectRatioClass != "custom" here: this test's square
-                // synthetic photo isn't close to A4 or Letter, so "custom" is the *correct* real
-                // classification for it, not evidence of an unprocessed placeholder -- the
-                // processing/ocr non-null checks above are what actually distinguish "really
-                // processed" from M1's raw-import shape for this fixture's shape.
+                // aspectRatioClass is "custom" here legitimately (the square fixture is neither A4 nor
+                // Letter); the processing/ocr checks above are what prove processing happened.
             }
         }
     }

@@ -25,19 +25,9 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
- * Closes `docs/testing-strategy.md`'s M1 "UI-level end-to-end" gap for the
- * desktop target (see `ROADMAP.md`'s M1 entry): drives the real
- * [App]/[LibraryScreen]/[ViewerScreen] composables through real simulated UI
- * interaction (clicks on real nodes, not direct function calls), against a
- * real [LibraryImporter] and a real (in-memory) SQLite [LibraryIndexRepository]
- * -- only the platform file picker itself is stubbed, since driving a real OS
- * file dialog isn't something a UI test can or should do; that's exactly the
- * one seam [App] already takes as a parameter for this reason.
- *
- * Runs headlessly via Compose Multiplatform's `runComposeUiTest`, which
- * renders through Skiko's software rasterizer -- no display server required,
- * so this runs identically in CI (`.github/workflows/ci.yml`) as on a
- * developer machine, unlike a screenshot-based approach would.
+ * Desktop UI end-to-end test: drives the real [App]/[LibraryScreen]/[ViewerScreen] through simulated
+ * clicks, against a real [LibraryImporter] and an in-memory SQLite [LibraryIndexRepository]. Only the
+ * file picker is stubbed. Runs headlessly on Skiko's software renderer, so it works in CI.
  */
 @OptIn(ExperimentalTestApi::class)
 class AppUiTest {
@@ -88,37 +78,30 @@ class AppUiTest {
                     importer = importer,
                     pickPdf = { PickedFile(bytes = samplePdfBytes(pageCount = 3), displayName = "Sonata.pdf") },
                     pickImages = { emptyList() },
-                    // Not what this scenario exercises (that's PedalSettingsUiTest.kt) -- a
-                    // fixed mapping and a no-op sink are enough to satisfy App's (M3-added,
-                    // non-optional) signature here.
+                    // Pedal behaviour is covered by PedalSettingsUiTest.
                     pedalMapping = PedalKeyMapping.DEFAULT,
                     onPedalMappingChange = {},
-                    // Not what this scenario exercises (that's a future PairingScreen UI test) --
-                    // a real identity/trust store are cheap enough to just provision for real
-                    // here, same as this test's real SQLite/LibraryImporter elsewhere.
+                    // Pairing isn't exercised here; a real identity/trust store is cheap to provide.
                     syncSettingsDirectory = syncDir,
                     localIdentity = getOrCreateDeviceIdentity(syncDir),
                     peerTrustStore = PeerTrustStore(File(syncDir, "trusted-peers.json")),
                 )
             }
 
-            // Starts empty -- "basic library screen" (ROADMAP.md M1) with nothing imported yet.
+            // Starts empty.
             onNodeWithTag(TestTags.EMPTY_LIBRARY).assertExists()
 
-            // "Import a score from a single PDF" -- through the real FAB -> dropdown ->
-            // pickPdf -> LibraryImporter.importPdf path, not a direct function call.
+            // Import through the real FAB -> dropdown -> pickPdf path.
             onNodeWithTag(TestTags.IMPORT_FAB).performClick()
             onNodeWithTag(TestTags.IMPORT_PDF_MENU_ITEM).performClick()
 
-            // The import runs on Dispatchers.IO (LibraryScreen.runImport) -- a real
-            // background dispatcher runComposeUiTest's virtual clock doesn't control --
-            // so wait against real time for it to land, rather than a bare
-            // waitForIdle() that could return before the background work finishes.
+            // The import runs on Dispatchers.IO, which the test's virtual clock doesn't control, so
+            // wait in real time rather than relying on waitForIdle().
             waitUntil(timeoutMillis = 10_000) {
                 onAllNodesWithText("Sonata").fetchSemanticsNodes().isNotEmpty()
             }
 
-            // "See it in the library" -- reflects the index (ADR-0005), not a directory scan.
+            // The library list reflects the index (ADR-0005), not a directory scan.
             onNodeWithText("Sonata").assertExists()
 
             // "Open it."
@@ -126,7 +109,7 @@ class AppUiTest {
             waitForIdle()
             onNodeWithTag(TestTags.VIEWER_PAGE_INDICATOR).assertTextEquals("1 / 3")
 
-            // "Turn pages" -- via the real tap zone, the same input a touch user has.
+            // Turn pages via the real tap zone.
             onNodeWithTag(TestTags.VIEWER_TAP_ZONE_NEXT).performClick()
             waitForIdle()
             onNodeWithTag(TestTags.VIEWER_PAGE_INDICATOR).assertTextEquals("2 / 3")

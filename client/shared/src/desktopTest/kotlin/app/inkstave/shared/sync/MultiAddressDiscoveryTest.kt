@@ -9,10 +9,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Pure-logic tests for the multi-interface discovery pieces: merging one device's sightings from
- * several responders, and trying its addresses in order. The real multi-interface behaviour was
- * verified on hardware (a desktop on Ethernet + Wi-Fi, a tablet on Wi-Fi); these pin down the
- * rules that make it safe.
+ * Logic tests for multi-interface discovery: merging one device's sightings from several responders,
+ * and trying its addresses in order.
  */
 class MultiAddressDiscoveryTest {
     private class Recording : SyncDeviceListener {

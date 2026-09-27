@@ -16,17 +16,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The headless equivalent of M1's headline end-to-end scenario
- * (`docs/testing-strategy.md`: "import a PDF, see it in the library, open
- * it, turn pages"), driving the real import/index/read code path without
- * going through actual UI widgets.
- *
- * **Known gap, disclosed rather than silently skipped:** this proves the
- * pipeline underneath the UI works end-to-end, but it is not a UI-level
- * test (no Compose UI, no real Android instrumentation, no real file
- * picker). True UI-level e2e automation (Android instrumented tests,
- * desktop UI-driver automation) is not built in this pass -- see the M1
- * completion report / `ROADMAP.md`.
+ * Headless import -> index -> read scenario (import a PDF, see it listed, open it, turn pages),
+ * below the UI; the UI-level version is `AppUiTest`.
  */
 class LibraryImporterEndToEndTest {
     private lateinit var libraryDir: File
@@ -63,17 +54,15 @@ class LibraryImporterEndToEndTest {
 
     @Test
     fun `import a PDF, see it in the library, open it, and read pages in order`() {
-        // "Import a score from a single PDF" (ROADMAP.md M1).
+        // Import a score from a single PDF.
         val manifest = importer.importPdf(title = "Sonata", pdfBytes = samplePdfBytes(pageCount = 4))
 
-        // "See it in the library" -- the library screen lists from the index, not by
-        // re-scanning .smpk files (ADR-0005, docs/performance.md).
+        // The library lists from the index, not by re-scanning .smpk files (ADR-0005).
         val libraryRow = index.listAll().singleOrNull { it.id == manifest.id }
         assertTrue(libraryRow != null, "imported score must appear in the library index immediately")
         assertEquals("Sonata", libraryRow.title)
 
-        // "Open it, turn pages" -- read the .smpk the same way the viewer screen would:
-        // manifest -> the score's one part -> each page's bytes, in page order.
+        // Read it as the viewer would: manifest -> the score's part -> each page's bytes in order.
         SmpkReader(File(libraryRow.filePath)).use { reader ->
             val part = reader.readPart(reader.readManifest().parts.single())
             assertEquals(4, part.pageOrder.size)
@@ -97,7 +86,7 @@ class LibraryImporterEndToEndTest {
 
     @Test
     fun `import a set of images, in the given order, as one score`() {
-        // "Import a score from a set of images" (ROADMAP.md M1).
+        // Import a score from a set of images.
         val manifest =
             importer.importImages(
                 title = "Image Score",

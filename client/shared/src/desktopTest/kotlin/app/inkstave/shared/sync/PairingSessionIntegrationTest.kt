@@ -10,13 +10,8 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * Real end-to-end pairing over a real loopback TLS socket -- two genuinely separate device
- * identities (two temp settings directories, each with its own `keytool`-generated certificate),
- * one acting as the accepting device (`PairingServer`) on a background thread, the other as the
- * initiating device (`PairingSession.initiate`) on the test thread. This is the honest ceiling for
- * "tested" a single-machine sandboxed environment can reach for networking code
- * (`docs/testing-strategy.md`) -- a real phone and a real desktop on a real LAN is not something
- * this pass claims to have exercised.
+ * Pairing over loopback TLS between two separate identities: a [PairingServer] on a background
+ * thread accepting, [PairingSession.initiate] on the test thread.
  */
 class PairingSessionIntegrationTest {
     private lateinit var acceptingDirectory: java.io.File
@@ -66,31 +61,20 @@ class PairingSessionIntegrationTest {
         val initiateResult = assertIs<PairingOutcome.AwaitingConfirmation>(initiateOutcome, "initiate: $initiateOutcome")
         val acceptResult = assertIs<PairingOutcome.AwaitingConfirmation>(acceptOutcome, "accept: $acceptOutcome")
 
-        // Each side learned the OTHER's identity, not its own: the initiator connected TO the
-        // acceptor, so the initiator's outcome reports the acceptor's ("Desktop") identity, and
-        // vice versa.
+        // Each side learned the other's identity, not its own.
         assertEquals("Desktop", initiateResult.peerIdentity.displayName)
         assertEquals(acceptingIdentity.deviceId, initiateResult.peerIdentity.deviceId)
         assertEquals("Phone", acceptResult.peerIdentity.displayName)
         assertEquals(initiatingIdentity.deviceId, acceptResult.peerIdentity.deviceId)
 
-        // The fingerprint each side computed of the OTHER's certificate must match what pinning
-        // that peer would later verify against -- i.e. the initiator's view of the acceptor's
-        // fingerprint is exactly what the acceptor's own identity actually presents, and vice
-        // versa. Real certificates, not stand-ins: this is the actual security property pairing
-        // depends on.
+        // Each side's fingerprint of the other's certificate is what pinning will later check.
         assertTrue(initiateResult.fingerprintSha256.isNotBlank())
         assertTrue(acceptResult.fingerprintSha256.isNotBlank())
         assertTrue(initiateResult.shortCode.isNotBlank())
 
-        // What each side pins is the OTHER's certificate, so the two pinned fingerprints must
-        // differ (two distinct identities)...
+        // Each side pins the other's certificate, so the pinned fingerprints differ...
         assertNotEquals(initiateResult.fingerprintSha256, acceptResult.fingerprintSha256)
-        // ...but the code shown to the human for "confirm this matches on both devices" must be
-        // identical on both screens. A real phone-to-desktop pairing found this wasn't true when
-        // the code was just the peer certificate's own fingerprint (each screen fingerprinted a
-        // different certificate, so they could never match, making the human comparison step
-        // meaningless).
+        // ...but the confirmation code shown to the human must be identical on both screens.
         assertEquals(initiateResult.shortCode, acceptResult.shortCode)
     }
 

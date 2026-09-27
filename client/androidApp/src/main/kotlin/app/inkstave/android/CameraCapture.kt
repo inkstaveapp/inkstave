@@ -9,16 +9,11 @@ import java.io.File
 import kotlin.coroutines.resume
 
 /**
- * Wraps [CaptureActivity] as the suspend `captureImages` function
- * `app.inkstave.shared.ui.App` expects (`ROADMAP.md` M4) -- the exact same shape as
- * [DocumentPicker.pickImages], and deliberately so: a finished capture session feeds into
- * [app.inkstave.shared.importer.LibraryImporter.importImages] via the identical path M1's
- * "import a set of images" flow already uses (`LibraryScreen`'s import menu), just with
- * [CaptureActivity] as the source of the [PickedFile]s instead of the system picker.
+ * Wraps [CaptureActivity] as the suspend `captureImages` function [app.inkstave.shared.ui.App] expects,
+ * mirroring [DocumentPicker.pickImages] so captures take the same `LibraryImporter.importImages` path.
  *
- * [ActivityResultContracts] launchers must be registered unconditionally during the activity's
- * initialization, before it reaches `STARTED` -- hence this being constructed as a property of
- * [activity] at class-init time, the same requirement [DocumentPicker] documents.
+ * Constructed as a property of [activity] at init time because [ActivityResultContracts] launchers
+ * must be registered before the activity reaches `STARTED`.
  */
 class CameraCapture(
     private val activity: ComponentActivity,
@@ -41,18 +36,9 @@ class CameraCapture(
 }
 
 /**
- * Reads each of [files] into a [PickedFile] (numbered `"capture-1.jpg"`, `"capture-2.jpg"`, ...
- * regardless of their actual cache filenames -- those are opaque temp names, not something a user
- * ever sees or that should end up as `manifest.json`'s `source.details.originalFilename`), in the
- * given order, which the caller must already have as the intended reading order (same M1
- * constraint [ImportPipeline]'s own doc states: no in-app page-reordering yet). Deletes each file
- * after reading it -- once its bytes are in the returned [PickedFile], the cache copy in
- * [CaptureActivity]'s output directory has no further purpose and would otherwise accumulate
- * across capture sessions.
- *
- * A plain function over [File] (not [CaptureActivity]/CameraX types) specifically so it's
- * unit-testable against real temporary files with synthetic bytes, the same honest-fixture
- * approach `ImportPipelineTest` uses -- see `CameraCaptureTest.kt`.
+ * Reads [files] into [PickedFile]s named `capture-1.jpg`, `capture-2.jpg`, ... in the given order
+ * (which becomes page order; the cache names are opaque), deleting each cache file once read so they
+ * don't accumulate. Takes plain [File]s so it can be unit-tested.
  */
 internal fun readCapturedFiles(files: List<File>): List<PickedFile> =
     files.mapIndexed { index, file ->

@@ -10,18 +10,12 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /**
- * Wraps Android's Storage Access Framework (`ACTION_OPEN_DOCUMENT` /
- * `ACTION_OPEN_DOCUMENT` with `EXTRA_ALLOW_MULTIPLE`) as the suspend
- * `pickPdf`/`pickImages` functions `app.inkstave.shared.ui.App` expects.
- * SAF needs no storage permission -- the system picker itself is the grant
- * (`docs/format-spec.md`/`ROADMAP.md` M1's "no runtime permissions" intent
- * for import, distinct from where the library itself is stored -- see
- * `MainActivity.kt`'s app-specific `filesDir` choice).
+ * Wraps the Storage Access Framework (`ACTION_OPEN_DOCUMENT`, multi-select for images) as the suspend
+ * `pickPdf`/`pickImages` functions [app.inkstave.shared.ui.App] expects. SAF needs no storage
+ * permission; the picker itself grants access.
  *
- * [ActivityResultContracts] launchers must be registered unconditionally
- * during the activity's initialization, before it reaches `STARTED` --
- * hence this being constructed as a property of [activity] at class-init
- * time (see `MainActivity.kt`), not lazily inside a click handler.
+ * Constructed as a property of [activity] at init time because [ActivityResultContracts] launchers
+ * must be registered before the activity reaches `STARTED`.
  */
 class DocumentPicker(
     private val activity: ComponentActivity,

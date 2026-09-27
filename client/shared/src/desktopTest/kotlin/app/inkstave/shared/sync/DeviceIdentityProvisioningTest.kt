@@ -11,11 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/**
- * Real `keytool`-backed tests (`DeviceIdentityProvisioning.desktop.kt`'s doc explains why
- * `keytool`, not a library) -- this actually shells out to the system `keytool` binary, the
- * honest integration-test ceiling for identity generation on desktop (`docs/testing-strategy.md`).
- */
+/** Desktop identity provisioning, shelling out to the real `keytool` binary. */
 class DeviceIdentityProvisioningTest {
     private lateinit var directory: java.io.File
 
@@ -55,9 +51,7 @@ class DeviceIdentityProvisioningTest {
     fun `the generated certificate's subject is the device's own deviceId, and its fingerprint is stable across builds`() {
         val identity = getOrCreateDeviceIdentity(directory)
         val sslContext = deviceIdentitySslContext(directory, TrustAnyPeerCertificate)
-        // The SSLContext alone doesn't hand back the leaf certificate directly -- load the same
-        // PKCS12 keystore keytool wrote, the same way DeviceIdentityProvisioning.desktop.kt itself
-        // does, to inspect the certificate this identity actually presents.
+        // SSLContext doesn't expose the leaf certificate, so load the PKCS12 keystore keytool wrote.
         val keystoreFile = java.io.File(directory, "device-identity.p12")
         assertTrue(keystoreFile.exists(), "keytool should have written a PKCS12 keystore")
 

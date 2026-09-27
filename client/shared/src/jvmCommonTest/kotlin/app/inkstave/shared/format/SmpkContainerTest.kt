@@ -6,12 +6,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Integration test for [SmpkWriter]/[SmpkReader]: writes a `.smpk` with
- * synthetic pages, reads it back, and asserts everything round-trips --
- * the concrete test `docs/testing-strategy.md` calls for on the container
- * format itself.
- */
+/** [SmpkWriter]/[SmpkReader] round-trip: a `.smpk` with synthetic pages reads back identically. */
 class SmpkContainerTest {
     @Test
     fun `write then read round-trips manifest, part, and page bytes`() {
@@ -64,8 +59,7 @@ class SmpkContainerTest {
 
     @Test
     fun `readManifest does not require reading page bytes first`() {
-        // Proves manifest access is genuinely random-access (docs/performance.md's
-        // "load only what's needed" principle) rather than requiring a full scan.
+        // The manifest is read by random access, without scanning the whole archive.
         val tempFile = File.createTempFile("inkstave-test-", ".smpk")
         tempFile.deleteOnExit()
 

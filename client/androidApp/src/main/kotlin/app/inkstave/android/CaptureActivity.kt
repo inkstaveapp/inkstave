@@ -52,24 +52,8 @@ import java.io.File
 import kotlin.coroutines.resume
 
 /**
- * The in-app camera capture screen (`ROADMAP.md` M4): live preview, a shutter button, and
- * multi-photo capture (one score is typically several page photos taken in one sitting, not one
- * photo per flow) with per-photo retake and a "Done" action that hands the finished batch back to
- * [CameraCapture] (this app's [MainActivity]) as a list of file paths, via
- * [EXTRA_CAPTURED_FILE_PATHS]. Launched by [CameraCapture.captureImages], the same
- * `ActivityResultContracts` pattern [DocumentPicker] uses for the system file picker -- an
- * in-process Activity here instead of an external one, but the same shape.
- *
- * **Build-verified, unlike some earlier client-side passes' new dependencies.** CameraX
- * (`androidx.camera:*`) resolved and compiled cleanly in the session this was written in --
- * `client/README.md`'s "Known rough edges" documents a JVM-specific outbound-network restriction
- * that blocked *other* new Gradle dependencies in earlier sessions (`compose.uiTest`, M1/M2/M3),
- * but that restriction did not reproduce for this dependency in this session; `:androidApp:assembleDebug`
- * and `:androidApp:testDebugUnitTest` both ran for real, not just script-compiled. What's still
- * genuinely unverified: **real camera preview/capture behavior**, which can't be exercised without
- * either a physical device or an emulator with working camera support, neither meaningfully
- * available in this environment -- left for the repo owner to verify at a physical device, the
- * same standing caveat `ROADMAP.md`'s M3 entry already states for pedal hardware.
+ * In-app camera capture: live preview, shutter, and multi-photo capture with per-photo retake.
+ * "Done" returns the batch to [CameraCapture] as file paths in [EXTRA_CAPTURED_FILE_PATHS].
  */
 class CaptureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,12 +74,8 @@ class CaptureActivity : ComponentActivity() {
         finish()
     }
 
-    /** Backs out with no result. Every path that can reach this has already deleted its own
-     * not-yet-finished capture files first (`CameraCaptureContent`'s Cancel button via
-     * [finishAndDelete]; the permission/no-hardware screens never captured anything to begin
-     * with) -- otherwise a cancelled session's photos would silently accumulate in
-     * [Context.getCacheDir] forever, since nothing else ever reads or cleans up a capture that
-     * was never finished. */
+    /** Backs out with no result. Callers delete their unfinished captures first, since nothing
+     * else ever cleans up [Context.getCacheDir]. */
     private fun finishCancelled() {
         setResult(RESULT_CANCELED)
         finish()
@@ -110,8 +90,7 @@ class CaptureActivity : ComponentActivity() {
     }
 }
 
-/** Routes to [NoCameraMessage]/[PermissionRationale]/[CameraCaptureContent] per [captureUiState]
- * -- see that function's own doc for why this decision is factored out as plain, testable logic. */
+/** Routes to [NoCameraMessage]/[PermissionRationale]/[CameraCaptureContent] per [captureUiState]. */
 @Composable
 private fun CaptureScreen(
     onFinish: (List<File>) -> Unit,
@@ -169,11 +148,8 @@ private fun PermissionRationale(
 }
 
 /**
- * The real capture UI: a live [PreviewView] behind a thumbnail strip of already-captured pages
- * and a Cancel/Shutter/Done control row. CameraX setup ([Preview] bound to [PreviewView]'s
- * surface, [ImageCapture] for the shutter) happens once, in a [LaunchedEffect] keyed on [Unit] --
- * [ProcessCameraProvider.bindToLifecycle] itself handles unbinding when [LocalLifecycleOwner]
- * (this Activity) stops, so there's no matching manual unbind needed here.
+ * Live [PreviewView] with a thumbnail strip and Cancel/Shutter/Done controls. CameraX is bound once;
+ * [ProcessCameraProvider.bindToLifecycle] unbinds when the Activity stops.
  */
 @Composable
 private fun CameraCaptureContent(
@@ -230,8 +206,7 @@ private fun CameraCaptureContent(
     }
 }
 
-/** Cancel's actual cleanup step -- deletes every not-yet-finished capture before calling
- * [onCancel], factored out of the click lambda above purely for readability. */
+/** Deletes every unfinished capture, then calls [onCancel]. */
 private fun finishAndDelete(
     capturedFiles: List<File>,
     onCancel: () -> Unit,
@@ -240,11 +215,8 @@ private fun finishAndDelete(
     onCancel()
 }
 
-/** Triggers one [ImageCapture.takePicture] call, writing a new JPEG into [Context.getCacheDir]
- * and invoking [onSaved] with it once CameraX confirms the write -- capture failures (a real,
- * if rare, CameraX outcome: storage full, hardware busy) are swallowed rather than crashing the
- * activity, since a failed shutter press should let the user just try again, not lose the whole
- * capture session. */
+/** Takes one photo into [Context.getCacheDir] and passes it to [onSaved]. Failures are swallowed so
+ * the user can retry without losing the session. */
 private fun captureOnePage(
     context: Context,
     imageCapture: ImageCapture,
@@ -273,22 +245,15 @@ private fun CapturedThumbnail(
         if (bitmap != null) {
             Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
         }
-        // A plain "x" glyph, not an icon-font/Material-icons dependency, consistent with the
-        // stamp palette's own reasoning (AnnotationOverlay.kt, M2) for staying on plain text
-        // rather than an icon dependency this project hasn't otherwise needed.
+        // Plain "x" glyph, avoiding an icon-font dependency.
         IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).size(20.dp)) {
             Text("×")
         }
     }
 }
 
-/**
- * Decodes [file] downsampled to roughly [targetSizePx] on its longer side, rather than the full
- * capture resolution -- a captured page photo is typically several megapixels, and decoding that
- * in full just to show a 72dp thumbnail would be a real, needless memory/time cost per photo in
- * the strip. `null` if the file can't be decoded (corrupt/incomplete write) -- shown as an empty
- * thumbnail slot rather than crashing the screen over one bad capture.
- */
+/** Decodes [file] downsampled to about [targetSizePx] on its longer side, since thumbnails don't need
+ * full resolution. `null` if the file can't be decoded. */
 private fun decodeSampledThumbnail(
     file: File,
     targetSizePx: Int,
@@ -305,9 +270,7 @@ private fun decodeSampledThumbnail(
     return BitmapFactory.decodeFile(file.absolutePath, options)
 }
 
-/** Adapts [ProcessCameraProvider.getInstance]'s `ListenableFuture` callback API into a suspend
- * call -- the standard CameraX-with-coroutines bridge (there's no first-party suspend entry
- * point for this in CameraX itself). */
+/** Bridges [ProcessCameraProvider.getInstance]'s `ListenableFuture` to a suspend call. */
 private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
     suspendCancellableCoroutine { continuation ->
         val future = ProcessCameraProvider.getInstance(this)

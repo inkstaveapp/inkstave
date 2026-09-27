@@ -29,9 +29,7 @@ class PagePointSpaceTest {
 
     @Test
     fun `pixelToPoint scales uniformly, independent of rendered pixel resolution`() {
-        // The center of a page rendered small and the center of the same page
-        // rendered large must both map to the canvas's own center point --
-        // that's the entire point of a resolution-independent coordinate space.
+        // The page center maps to the canvas center at any render size: the space is resolution-independent.
         val small = PagePointSpace.pixelToPoint(px = 100.0, py = 100.0, renderedWidthPx = 200.0, renderedHeightPx = 200.0)
         val large = PagePointSpace.pixelToPoint(px = 1000.0, py = 1000.0, renderedWidthPx = 2000.0, renderedHeightPx = 2000.0)
 

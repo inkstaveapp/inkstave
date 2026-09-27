@@ -18,16 +18,9 @@ private class RecordingKeyboardController : SoftwareKeyboardController {
 }
 
 /**
- * Covers [onTextFieldFocusChanged] -- the pure decision behind
- * [Modifier.showSoftKeyboardOnFocus] (`ROADMAP.md` M3's pedal-suppresses
- * -the-soft-keyboard fix) -- without needing a Compose UI test harness
- * (`compose.uiTest`, unresolvable in this sandboxed session; see
- * `client/README.md`'s "Known rough edges"). Extracting the actual
- * gain-focus-or-not-then-show logic into a plain function taking a
- * `Boolean` and a fake [SoftwareKeyboardController] -- rather than only
- * being reachable through the `Modifier.onFocusChanged` lambda that calls
- * it -- is what makes this fully testable without that dependency at all,
- * not just a partial workaround for it.
+ * Covers [onTextFieldFocusChanged], the decision behind [Modifier.showSoftKeyboardOnFocus]
+ * (showing the soft keyboard even when a hardware pedal is connected), with a fake
+ * [SoftwareKeyboardController] instead of a Compose UI test.
  */
 class SoftKeyboardTest {
     @Test

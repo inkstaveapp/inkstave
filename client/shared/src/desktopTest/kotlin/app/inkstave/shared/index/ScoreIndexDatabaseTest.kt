@@ -8,15 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Proves the SQLDelight-generated local index (ADR-0005,
- * `docs/decisions/0005-local-library-index-database.md`) actually works:
- * a row written through [InkstaveDatabase] can be read back, searched, and
- * deleted. This is the "integration test" `docs/testing-strategy.md`
- * requires for the local index database's central claim.
- *
- * Runs against an in-memory SQLite database via the JDBC driver -- the same
- * driver the real desktop app uses (`docs/decisions/0001-client-framework.md`),
- * so this exercises real SQL, not a fake/in-process substitute.
+ * The SQLDelight local index (ADR-0005) against real in-memory SQLite via the JDBC driver the desktop
+ * app uses: rows can be written, read back, searched and deleted.
  */
 class ScoreIndexDatabaseTest {
     private lateinit var driver: JdbcSqliteDriver

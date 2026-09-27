@@ -7,11 +7,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Integration tests for [SmpkReader.readAnnotationLayer] and [SmpkUpdater]
- * -- the M2 gap M1's container support left open. Covers exactly the
- * regression [SmpkUpdater]'s rewrite-based approach could introduce if done
- * carelessly: updating one page's annotations must never disturb any other
- * entry in the package.
+ * Tests for [SmpkReader.readAnnotationLayer] and [SmpkUpdater]: updating one page's annotations must
+ * never disturb any other entry in the package.
  */
 class SmpkAnnotationUpdateTest {
     private fun scoreWithPages(vararg pageIds: String): File {
@@ -32,8 +29,7 @@ class SmpkAnnotationUpdateTest {
             pageIds.map { id ->
                 SmpkPage(
                     id = id,
-                    // Distinct bytes per page (not just a repeated pattern) so a test
-                    // that mixes up which page's bytes it's comparing would fail loudly.
+                    // Distinct bytes per page, so mixing up pages fails loudly.
                     pngBytes = ByteArray(64) { (it + id.hashCode()).toByte() },
                     meta = PageMeta(id = id, width = 100, height = 200, aspectRatioClass = "custom"),
                 )
@@ -99,18 +95,17 @@ class SmpkAnnotationUpdateTest {
         )
 
         SmpkReader(file).use { reader ->
-            // The updated page's annotation layer is actually there.
+            // The updated page's annotation layer is present.
             assertEquals(1, reader.readAnnotationLayer("page-2").textNotes.size)
-            // Every page's other data -- including the updated page's own PNG bytes --
-            // survives byte-for-byte, since only the annotations/page-2.json entry
-            // should have been touched by the rewrite.
+            // Every page's other data, including the updated page's PNG, survives byte-for-byte:
+            // only annotations/page-2.json should change.
             assertContentEquals(originalBytes.getValue("page-1"), reader.readPageBytes("page-1"))
             assertContentEquals(originalBytes.getValue("page-2"), reader.readPageBytes("page-2"))
             assertContentEquals(originalBytes.getValue("page-3"), reader.readPageBytes("page-3"))
-            // Unaffected pages have no annotation entry at all -- still the empty default.
+            // Unaffected pages still have no annotation entry.
             assertTrue(reader.readAnnotationLayer("page-1").textNotes.isEmpty())
             assertTrue(reader.readAnnotationLayer("page-3").textNotes.isEmpty())
-            // Manifest and part are unaffected too.
+            // Manifest and part are unaffected.
             assertEquals(originalManifest.id, reader.readManifest().id)
             assertEquals(originalPart.pageOrder, reader.readPart("part-1").pageOrder)
         }

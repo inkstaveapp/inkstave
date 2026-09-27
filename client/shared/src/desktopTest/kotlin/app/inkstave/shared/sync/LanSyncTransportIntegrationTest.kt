@@ -15,12 +15,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Real end-to-end capture-session transfer: two genuine device identities, each already trusting
- * the other's real certificate fingerprint (simulating the state pairing leaves behind, without
- * re-driving the full `PairingSession` exchange here -- that's `PairingSessionIntegrationTest`'s
- * job), talking over a real loopback TLS socket via [SyncServer]/[LanSyncTransport]. The same
- * honest ceiling as `PairingSessionIntegrationTest`: real sockets and real certificates on one
- * machine, not a real phone and a real desktop on a real LAN.
+ * Capture-session transfer over loopback TLS via [SyncServer]/[LanSyncTransport], between two real
+ * identities that already trust each other's fingerprints (as pairing would leave them).
  */
 class LanSyncTransportIntegrationTest {
     private lateinit var senderDirectory: java.io.File
@@ -38,8 +34,7 @@ class LanSyncTransportIntegrationTest {
         receiverDirectory.deleteRecursively()
     }
 
-    /** Loads the real certificate `DeviceIdentityProvisioning.desktop.kt` generated for [settingsDirectory] and
-     * returns its fingerprint -- the same certificate a real pairing exchange would have pinned. */
+    /** Fingerprint of the certificate generated for [settingsDirectory], as pairing would pin it. */
     private fun realFingerprintOf(settingsDirectory: java.io.File): String {
         getOrCreateDeviceIdentity(settingsDirectory) // ensure it's provisioned first
         val metadata = Json.parseToJsonElement(java.io.File(settingsDirectory, "device-identity.json").readText()).jsonObject
@@ -59,8 +54,7 @@ class LanSyncTransportIntegrationTest {
         val senderIdentity = getOrCreateDeviceIdentity(senderDirectory)
         val receiverIdentity = getOrCreateDeviceIdentity(receiverDirectory)
 
-        // The state pairing would have left behind: each side already trusts the other's real
-        // certificate fingerprint.
+        // As pairing would leave it: each side trusts the other's fingerprint.
         val senderTrustStore = PeerTrustStore(java.io.File(senderDirectory, "trusted-peers.json"))
         senderTrustStore.add(TrustedPeer(receiverIdentity.deviceId, "Desktop", realFingerprintOf(receiverDirectory)))
         val receiverTrustStore = PeerTrustStore(java.io.File(receiverDirectory, "trusted-peers.json"))
@@ -114,23 +108,14 @@ class LanSyncTransportIntegrationTest {
             }.apply { start() }
 
         val senderTrustStore = PeerTrustStore(java.io.File(senderDirectory, "trusted-peers.json"))
-        // The sender trusts the receiver's real fingerprint (so *its* side of the handshake would
-        // accept the receiver) -- what must fail is the receiver refusing the sender, since the
-        // receiver never paired with it.
+        // The sender trusts the receiver, so what must fail is the receiver refusing the sender.
         senderTrustStore.add(TrustedPeer(receiverIdentity.deviceId, "Desktop", realFingerprintOf(receiverDirectory)))
         val transport = LanSyncTransport(senderDirectory, senderTrustStore)
         val peer = TrustedPeer(receiverIdentity.deviceId, "Desktop", realFingerprintOf(receiverDirectory))
 
-        // Deliberately NOT `transport.connect(peer, ...).close()`, and deliberately not just one
-        // `send()` either: TLS 1.3's client-authentication flow means the *sender's* `connect()`
-        // -- and even a single small `send()` right after it -- can complete successfully from the
-        // sender's own point of view even though the *receiver* already rejected its certificate:
-        // a small enough write fits in the OS socket send buffer and returns before the receiver's
-        // already-sent TLS close alert is ever processed locally, the same ordinary TCP behavior
-        // that makes "did the peer actually receive this" fundamentally unknowable from a write
-        // succeeding alone. A `receive()` (read) doesn't have that ambiguity -- there is, and never
-        // will be, anything more to read from a connection the receiver already tore down, so it
-        // reliably surfaces what `serverFailed` below already separately proves happened.
+        // Under TLS 1.3 the sender's connect() and even a small send() can succeed locally after the
+        // receiver has already rejected the certificate (the write fits in the socket buffer). A
+        // receive() reliably fails because the receiver has closed the connection.
         assertFailsWith<IOException> {
             transport.connect(peer, "127.0.0.1", server.boundPort).use { connection ->
                 connection.send(CaptureSessionMessage.SessionStart("irrelevant-session", "Irrelevant"))

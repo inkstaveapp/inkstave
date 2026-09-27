@@ -9,11 +9,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Real two-JmDNS-instance discovery over this machine's actual multicast (loopback/local
- * interface) -- **not guaranteed to work in every sandboxed/containerized environment**, since
- * some restrict multicast entirely; `docs/testing-strategy.md` calls for verifying this honestly
- * rather than assuming, so this test's own pass/fail result (see `ROADMAP.md`'s M4 entry for what
- * actually happened when this was run) is the verification, not a claim made in this comment.
+ * Real two-instance JmDNS discovery over this machine's multicast. Environments that block multicast
+ * (some sandboxes and containers) will fail it.
  */
 class JmDnsSyncDiscoveryTest {
     private val discoveryInstances = mutableListOf<JmDnsSyncDiscovery>()

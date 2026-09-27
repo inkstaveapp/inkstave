@@ -9,10 +9,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Correctness tests for [AnnotationSpatialIndex] against a small, exactly
- * -known dataset (the large-scale stress/timing-budget test lives in
- * `jvmCommonTest`, since it needs JVM timing APIs -- see
- * `AnnotationSpatialIndexPerformanceTest`).
+ * Correctness of [AnnotationSpatialIndex] on a small, known dataset. The timing test is
+ * `AnnotationSpatialIndexPerformanceTest` (it needs JVM timing APIs).
  */
 class AnnotationSpatialIndexTest {
     private val near = AnnotationItem.StampItem(Stamp(id = "near", symbol = "accent", x = 50.0, y = 50.0, scale = 1.0, rotationDeg = 0.0))

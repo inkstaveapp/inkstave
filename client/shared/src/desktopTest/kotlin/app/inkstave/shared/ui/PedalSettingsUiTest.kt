@@ -14,11 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * Real simulated-UI coverage for [PedalSettingsScreen] (`ROADMAP.md` M3): the actual composable
- * driven via `runComposeUiTest`, with real clicks and simulated key input. These tests caught the
- * Reset/Back buttons being laid out off-screen the first time they could actually run.
- */
+/** [PedalSettingsScreen] driven via `runComposeUiTest`, with real clicks and simulated key input. */
 @OptIn(ExperimentalTestApi::class)
 class PedalSettingsUiTest {
     @Test

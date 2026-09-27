@@ -21,17 +21,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Proves the actual headline flow this integration exists for: a capture session, discovered and
- * sent by [CaptureSessionSender] the way a real Android send action would drive it, arrives on a
- * real [SyncServer], is imported by [CaptureSessionReceiver] via the exact same
- * [LibraryImporter.importImages] path M1's local import already uses, and is readable back out
- * via [SmpkReader] -- composing every primitive the four prior sync commits already built and
- * tested individually (discovery, pairing-established trust, the transport), not introducing any
- * new one.
- *
- * Same honest ceiling as [LanSyncTransportIntegrationTest]/[PairingSessionIntegrationTest]: two
- * real device identities, real JmDNS discovery, and a real loopback TLS connection on one
- * machine -- never a real phone and a real desktop on a real LAN.
+ * End-to-end capture session: [CaptureSessionSender] discovers and sends to a real [SyncServer],
+ * [CaptureSessionReceiver] imports it via [LibraryImporter.importImages], and [SmpkReader] reads it back.
+ * Uses real identities, JmDNS and loopback TLS on one machine, not two devices on a LAN.
  */
 class CaptureSessionSyncEndToEndTest {
     private lateinit var senderDirectory: File
@@ -60,9 +52,7 @@ class CaptureSessionSyncEndToEndTest {
         libraryDirectory.deleteRecursively()
     }
 
-    /** Same real-certificate-fingerprint helper [LanSyncTransportIntegrationTest] uses, to simulate the trust
-     * state a real pairing exchange would have left behind without re-driving [PairingSession] here (that
-     * exchange is [PairingSessionIntegrationTest]'s job, not this test's). */
+    /** The pinned fingerprint a pairing would have stored, without re-running [PairingSession]. */
     private fun realFingerprintOf(settingsDirectory: File): String {
         getOrCreateDeviceIdentity(settingsDirectory)
         val metadata = Json.parseToJsonElement(File(settingsDirectory, "device-identity.json").readText()).jsonObject
@@ -96,8 +86,7 @@ class CaptureSessionSyncEndToEndTest {
         val receiverTrustStore = PeerTrustStore(File(receiverDirectory, "trusted-peers.json"))
         receiverTrustStore.add(TrustedPeer(senderIdentity.deviceId, senderIdentity.displayName, realFingerprintOf(senderDirectory)))
 
-        // The receiving ("desktop") side: exactly what Main.kt's persistent listener does -- advertise,
-        // accept one connection, hand it to CaptureSessionReceiver.
+        // Receiving ("desktop") side, as Main.kt's listener does: advertise, accept, hand to the receiver.
         val receiverDiscovery = JmDnsSyncDiscovery.create()
         val server = SyncServer(receiverDirectory, receiverTrustStore)
         receiverDiscovery.advertise(receiverIdentity, server.boundPort, setOf(DeviceRole.PROCESSING))
@@ -108,9 +97,7 @@ class CaptureSessionSyncEndToEndTest {
             Thread {
                 try {
                     server.acceptOne().use { connection ->
-                        // null: this test proves the transport/import composition (this file's own
-                        // scope, unchanged by the processing-pipeline slice), not the pipeline
-                        // integration itself -- see CaptureSessionProcessingIntegrationTest for that.
+                        // No processing client: CaptureSessionProcessingIntegrationTest covers processing.
                         importedManifestId =
                             CaptureSessionReceiver.receiveAndImport(connection, importer, processingClient = null).manifest.id
                     }
@@ -119,8 +106,7 @@ class CaptureSessionSyncEndToEndTest {
                 }
             }.apply { start() }
 
-        // The sending ("phone") side: exactly what a real Android "send to desktop" action does --
-        // its own short-lived discovery instance, CaptureSessionSender.
+        // Sending ("phone") side: its own short-lived discovery plus CaptureSessionSender.
         val senderDiscovery = JmDnsSyncDiscovery.create()
         try {
             val sender = CaptureSessionSender(senderDiscovery, LanSyncTransport(senderDirectory, senderTrustStore))
@@ -143,8 +129,7 @@ class CaptureSessionSyncEndToEndTest {
         assertEquals(null, receiverFailure, "receiving side must not throw: $receiverFailure")
         val manifestId = importedManifestId ?: error("receiving side never completed an import")
 
-        // "See it in the library" (the receiving/desktop device's own library, per this
-        // integration's scope) -- indexed immediately, not by a filesystem scan (ADR-0005).
+        // Indexed immediately, not by a filesystem scan (ADR-0005).
         val libraryRow = index.listAll().singleOrNull { it.id == manifestId }
         assertTrue(libraryRow != null, "a session received over sync must appear in the receiving device's library index")
         assertEquals("Moonlight Sonata", libraryRow.title)
@@ -164,8 +149,7 @@ class CaptureSessionSyncEndToEndTest {
 
         val discovery = JmDnsSyncDiscovery.create()
         try {
-            // Nothing on the network advertises "nobody-on-the-network" -- a real JmDNS browse, genuinely
-            // searching, that genuinely finds nothing, not a fake standing in for that outcome.
+            // A real browse that finds nothing, not a stub.
             val sender = CaptureSessionSender(discovery, LanSyncTransport(senderDirectory, senderTrustStore))
             val outcome =
                 sender.send(

@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** Unit tests for [PageMetaJson] -- mirrors [ManifestJsonTest]'s round-trip/unknown-field coverage. */
 class PageMetaJsonTest {
-    /** Mirrors `format/fixtures/page-meta.v1.json` (fully populated, as M4's pipeline would produce). */
+    /** Mirrors `format/fixtures/page-meta.v1.json`, fully populated as the processing pipeline produces it. */
     private val fullyPopulatedFixture =
         """
         {
@@ -31,7 +31,7 @@ class PageMetaJsonTest {
         }
         """.trimIndent()
 
-    /** An M1-imported page: no pipeline has run yet, so `processing`/`ocr` are absent. */
+    /** A raw-imported page: no processing has run, so `processing`/`ocr` are absent. */
     private val m1ImportedFixture =
         """
         {

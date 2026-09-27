@@ -20,18 +20,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The headless equivalent of M2's headline end-to-end scenario
- * (`docs/testing-strategy.md`: "annotate a page, close and reopen the
- * score, annotation is still there and in the right place"), driving the
- * real import -> annotate -> save -> reopen path without real UI widgets --
- * same style as [app.inkstave.shared.importer.LibraryImporterEndToEndTest].
- *
- * **Known gap, disclosed rather than silently skipped:** this proves the
- * annotation persistence path underneath the UI works end-to-end, but it
- * doesn't drive [app.inkstave.shared.ui.AnnotationOverlay]'s actual gesture
- * handling -- that would need `compose.uiTest`, which this session's
- * environment can't resolve (same blocker as M1's `AppUiTest.kt` --
- * `client/README.md`'s "Known rough edges").
+ * Headless annotate-and-reopen scenario: import -> annotate -> save -> reopen, checking the annotation
+ * persists in the right place. Covers persistence only, not
+ * [app.inkstave.shared.ui.AnnotationOverlay]'s gesture handling.
  */
 class AnnotationEndToEndTest {
     private lateinit var libraryDir: File
@@ -68,7 +59,7 @@ class AnnotationEndToEndTest {
 
     @Test
     fun `annotate a page, close and reopen the score, the annotation is still there and correctly placed`() {
-        // Import a score, same as M1's headline flow.
+        // Import a score.
         val manifest = importer.importPdf(title = "Sonata", pdfBytes = samplePdfBytes(pageCount = 2))
         val scoreFile = File(index.listAll().single { it.id == manifest.id }.filePath)
 
@@ -80,10 +71,8 @@ class AnnotationEndToEndTest {
                 part.pageOrder.first()
             }
 
-        // "Annotate a page": draw a stroke (as AnnotationOverlay's pen tool would
-        // produce), run it through undo/redo history the way a real edit session
-        // would, and save via SmpkUpdater -- the same persistence path the UI uses,
-        // debounced there, called directly here.
+        // Draw a stroke as the pen tool would, run it through undo/redo history, and save via
+        // SmpkUpdater (debounced in the UI, called directly here).
         val history = AnnotationHistory(initial = AnnotationLayer.empty(firstPageId))
         val stroke =
             Stroke(
@@ -95,17 +84,14 @@ class AnnotationEndToEndTest {
         history.push(history.current.copy(strokes = listOf(stroke)))
         SmpkUpdater.updateAnnotationLayer(scoreFile, history.current)
 
-        // "Close and reopen": a fresh SmpkReader over the same file, as opening the
-        // viewer again would do -- not reusing any in-memory state from the write above.
+        // Reopen with a fresh SmpkReader, sharing no in-memory state with the write.
         SmpkReader(scoreFile).use { reader ->
             val layer = reader.readAnnotationLayer(firstPageId)
             assertEquals(1, layer.strokes.size, "the annotation must still be there after reopening")
             assertEquals(stroke.points, layer.strokes.single().points, "and in the right place -- exact point coordinates preserved")
         }
 
-        // The *other* page must remain unannotated -- proves the update was scoped
-        // to the one page actually edited, the same guarantee SmpkAnnotationUpdateTest
-        // checks directly against SmpkUpdater.
+        // The other page must stay unannotated: the update is scoped to the edited page.
         SmpkReader(scoreFile).use { reader ->
             val part = reader.readPart(reader.readManifest().parts.single())
             val secondPageId = part.pageOrder[1]

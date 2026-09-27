@@ -10,26 +10,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * `docs/performance.md`'s M2 QA gate ("pan/zoom on a page with several
- * hundred annotation objects holds native frame rate, no visible stutter")
- * stated as a frame-rate target, but literal frame-timing isn't
- * meaningfully automatable in a headless test. **This is the honest
- * automated proxy, not a literal frame-rate measurement**: it asserts
- * [AnnotationSpatialIndex.query]/[hitTest] stay fast and, separately and
- * just as importantly, stay *correct* under a stress-sized dataset --
- * don't read a green run of this test as "M2 hits 60fps," only as "the
- * spatial index that viewport culling and hit-testing depend on doesn't
- * degrade to a linear scan as annotation count grows."
+ * Automated proxy for `docs/performance.md`'s "hundreds of annotations at native frame rate" goal:
+ * [AnnotationSpatialIndex.query]/[hitTest] must stay correct and fast on a stress-sized dataset. It
+ * does not measure frame rate.
  *
- * Budget: **2ms per query, averaged over many queries.** Justification: a
- * 60fps frame has a ~16.7ms budget; a real frame does a query (or two --
- * culling plus a possible hit-test) plus everything else (layout, drawing,
- * page-bitmap composition), so the query itself needs to be a small
- * fraction of that, not most of it. 2ms leaves roughly 8x headroom under a
- * single frame's total budget even in the worst case of this being the
- * only thing happening in a frame -- comfortable margin for a CI machine
- * slower than a dev workstation, without being so loose the test stops
- * meaning anything.
+ * Budget: 2ms per query on average, a small fraction of a 60fps frame's ~16.7ms with headroom for
+ * slower CI machines.
  */
 class AnnotationSpatialIndexPerformanceTest {
     /** A deterministic (fixed-seed) but realistically-scattered stress dataset, mixing all four annotation kinds. */

@@ -1,8 +1,5 @@
-"""Unit tests for `inkstave_processing.pipeline.ocr` -- the OCR layout-classification heuristic,
-run against synthetic title-page images with known text at known positions/sizes, the same
-honest synthetic-fixture spirit as the rest of this pipeline's tests (`tests/pipeline/fixtures.py`'s
-module doc). There's no real scanned sheet music to test against; a rendered image with
-known-correct text in known-correct positions is the closest honest substitute.
+"""Tests for the OCR layout classification in `inkstave_processing.pipeline.ocr`, using synthetic
+title pages with known text at known positions and sizes.
 """
 
 from __future__ import annotations
@@ -13,10 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 from inkstave_processing.pipeline.ocr import extract_metadata_candidates
 from inkstave_processing.pipeline.types import ImageU8
 
-#: A widely-available system font (present on this dev machine and any standard Debian/Ubuntu
-#: install) -- picked over `ImageFont.load_default()` specifically because it supports arbitrary
-#: point sizes, which this module's title/composer size differences require to be a meaningful
-#: test signal at all.
+#: A common system font that, unlike `ImageFont.load_default()`, supports arbitrary point sizes,
+#: which the title/composer size differences depend on.
 _FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
@@ -36,11 +31,8 @@ def _make_title_page(
     width: int = 1000,
     height: int = 1300,
 ) -> ImageU8:
-    """A synthetic page laid out like a real title page: a large centered title near the top, an
-    optional smaller centered subtitle below it, and optional smaller composer/arranger text in
-    the top-right/top-left -- exactly the convention `docs/image-pipeline.md`'s heuristic (and
-    this module's own subtitle extension) targets. Body of the page is left blank (real sheet
-    music notation isn't relevant to this heuristic, which only looks at the upper region)."""
+    """A synthetic title page: large centered title, optional subtitle below it, and optional
+    composer/arranger text top-right/top-left, as `docs/image-pipeline.md` describes."""
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
     _draw_text(draw, title, size=64, center_x=width // 2, top_y=60)
@@ -68,12 +60,8 @@ def test_classifies_title_composer_arranger_and_subtitle_correctly() -> None:
 
 
 def test_title_confidence_is_the_highest_among_purely_positional_fields() -> None:
-    # Title's positional assumption (largest + centered) is the strongest *positional* one this
-    # heuristic makes -- see ocr.py's module doc. Default fixture's arranger ("arr. Jane Doe") is
-    # itself label-matched (see the label-priority tests below), which is a stronger signal than
-    # any position and is expected to outrank title's -- so this test uses an arranger with no
-    # label prefix, to isolate and confirm the original positional-only invariant still holds
-    # among fields position alone is classifying.
+    # Uses an arranger without a label prefix: a label would outrank position, and this test
+    # checks the positional rule on its own.
     result = extract_metadata_candidates(_make_title_page(arranger="Jane Doe"))
 
     assert "title" in result.confidence
@@ -82,11 +70,8 @@ def test_title_confidence_is_the_highest_among_purely_positional_fields() -> Non
 
 
 def test_a_label_match_outranks_a_positional_guess_in_confidence() -> None:
-    # The actual new priority this pass adds: an explicit label is a stronger signal than any
-    # inferred position, and that should show up as a real confidence difference, not just a
-    # classification difference. Default fixture's arranger is "arr. Jane Doe" (label-matched);
-    # composer is "L. van Beethoven" (no label, purely positional) -- same page, same OCR
-    # conditions, so this isolates the label-vs-position confidence difference specifically.
+    # An explicit label must give higher confidence than position alone. Here the arranger is
+    # label-matched ("arr. Jane Doe") and the composer purely positional, on the same page.
     result = extract_metadata_candidates(_make_title_page())
 
     assert "arranger" in result.confidence and "composer" in result.confidence
@@ -94,7 +79,7 @@ def test_a_label_match_outranks_a_positional_guess_in_confidence() -> None:
 
 
 def test_lyricist_is_never_proposed() -> None:
-    # See ocr.py's module doc: no defensible positional heuristic exists for this field yet.
+    # See ocr.py's module doc: no positional heuristic exists for this field yet.
     result = extract_metadata_candidates(_make_title_page())
 
     assert "lyricist" not in result.candidates
@@ -138,14 +123,9 @@ def _make_page_with_single_credit_line(
     width: int = 1000,
     height: int = 1300,
 ) -> ImageU8:
-    """A page with just a title and one extra line of text positioned by `x`/`align` ("left":
-    `x` is the text's left edge; "right": `x` is its right edge; "center": `x` is its center) --
-    isolates label-vs-position classification without the rest of `_make_title_page`'s fixed
-    layout getting in the way. Left/right alignment (not center-on-a-point) specifically to avoid
-    a real trap: centering a longer credit line on a point near either edge can push part of the
-    text past the image boundary, where it gets silently clipped and OCR reads the clipped
-    remainder as garbage -- this bit an earlier version of these tests directly (a "Composer:
-    John Smith" line centered near the left edge OCR'd as "nposer: John Smith").
+    """A page with a title and one extra line placed by `x`/`align` ("left": left edge, "right":
+    right edge, "center": center). Edge-anchored rather than centered near an edge, because text
+    pushed past the image border is clipped and OCR reads the remainder as garbage.
     """
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
@@ -166,9 +146,7 @@ def _make_page_with_single_credit_line(
 
 
 def test_explicit_label_overrides_what_position_alone_would_have_guessed() -> None:
-    # "Composer: John Smith" placed on the *left* -- pure position would call left-side text
-    # "arranger" (docs/image-pipeline.md's own top-right/top-left convention), but an explicit
-    # label must win regardless of where it physically sits on the page.
+    # Position alone would call left-side text "arranger"; an explicit label must win.
     page = _make_page_with_single_credit_line("Composer: John Smith", x=60, top_y=40, align="left")
 
     result = extract_metadata_candidates(page)
@@ -195,11 +173,8 @@ def test_words_by_label_is_also_classified_as_lyricist() -> None:
 
 
 def test_ampersand_joined_names_on_one_line_stay_as_one_credit_not_two() -> None:
-    # A single OCR'd line naturally containing two names ("John Smith & Jane Doe") must not be
-    # mistaken by _split_by_horizontal_gap for two separate credit blocks sharing a row (the
-    # mechanism that correctly splits e.g. a composer-top-right/arranger-top-left pair that share
-    # a row with nothing else interrupting it) -- normal word/"&"-spacing must stay well under
-    # that split threshold.
+    # Normal word and "&" spacing within one line must stay under _split_by_horizontal_gap's
+    # threshold, so a two-name credit isn't split into two blocks.
     page = _make_page_with_single_credit_line(
         "Music by John Smith & Jane Doe",
         x=500,
@@ -212,17 +187,13 @@ def test_ampersand_joined_names_on_one_line_stay_as_one_credit_not_two() -> None
     composer = result.candidates.get("composer", "").upper()
     assert "JOHN SMITH" in composer
     assert "JANE DOE" in composer
-    # If the line had incorrectly been split, "& Jane Doe" would fall through to the positional
-    # fallback as its own line and could turn up as a spurious arranger/subtitle guess instead of
-    # staying part of the one composer candidate.
+    # Had the line been split, "& Jane Doe" would become a separate positional guess.
     assert "JANE DOE" not in result.candidates.get("arranger", "").upper()
     assert "JANE DOE" not in result.candidates.get("subtitle", "").upper()
 
 
 def test_multiple_positionally_matching_lines_are_combined_not_reduced_to_one() -> None:
-    # Two separate, unlabeled composer-position (top-right) lines, stacked vertically -- both
-    # should end up in the combined composer candidate, not just whichever one the old
-    # single-winner logic would have picked.
+    # Two stacked, unlabeled top-right lines must both end up in the composer candidate.
     image = Image.new("RGB", (1000, 1300), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
     _draw_text(draw, "UNTITLED WORK", size=64, center_x=500, top_y=60)
@@ -242,8 +213,7 @@ def test_multiple_positionally_matching_lines_are_combined_not_reduced_to_one() 
 
 
 def test_multiple_labeled_lines_for_the_same_field_are_combined() -> None:
-    # Two separately-labeled composer lines (an unusual but real case -- two co-composers each
-    # explicitly credited) must both survive into the combined candidate, not just one.
+    # Two separately labeled composer lines (co-composers) must both survive.
     image = Image.new("RGB", (1000, 1300), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
     _draw_text(draw, "UNTITLED WORK", size=64, center_x=500, top_y=60)
