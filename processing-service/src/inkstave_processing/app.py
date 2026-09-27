@@ -1,13 +1,5 @@
-"""The FastAPI application.
-
-``GET /health`` (M0) and ``POST /process-page`` (M4 slice 2, per
-``docs/image-pipeline.md``'s "Service interface (sketch)") -- the full
-image-cleanup + OCR pipeline (``inkstave_processing.pipeline.run.process_page``),
-exposed as one local HTTP call. Still loopback-only
-(``processing-service/README.md``'s ``127.0.0.1:8787``) -- this module
-doesn't change that, it only gives the desktop client something to call
-besides ``/health``. Wiring the *client* to actually call this endpoint is a
-later M4 slice, not this one.
+"""The FastAPI application: ``GET /health`` and ``POST /process-page``, which
+runs the full cleanup and OCR pipeline on one uploaded image.
 """
 
 from __future__ import annotations
@@ -26,8 +18,7 @@ SERVICE_VERSION = "0.1.0"
 
 
 def create_app() -> FastAPI:
-    """Builds the FastAPI application. A factory (not a module-level singleton)
-    so tests can construct a fresh instance per test if that's ever needed."""
+    """Builds the FastAPI application (a factory, so tests get a fresh instance)."""
     app = FastAPI(title=SERVICE_NAME, version=SERVICE_VERSION)
 
     @app.get("/health")
@@ -42,23 +33,15 @@ def create_app() -> FastAPI:
         sequence_index: int,
         contrast_strength: float = 0.7,
     ) -> ProcessPageResponse:
-        """Runs the full pipeline on one captured/imported page image and returns the cleaned
-        result plus processing/OCR metadata -- `docs/image-pipeline.md`'s sketched contract.
+        """Runs the pipeline on one page image and returns the cleaned page plus
+        processing and OCR metadata.
 
-        `session_id`/`sequence_index` identify which capture session and which photo within it
-        this request belongs to (query parameters, not part of the body -- the body is the raw
-        image bytes themselves, undecoded, to avoid the size/encoding overhead a JSON- or
-        multipart-wrapped request would add for what's typically the largest payload this service
-        ever handles; see `ProcessPageResponse`'s own doc for why the *response* makes the
-        opposite trade-off). Neither is used by the pipeline itself yet -- they exist in this
-        request shape now because `docs/image-pipeline.md` already specifies them as part of the
-        contract, for a later M4 slice (LAN capture-session handling) to actually make use of,
-        not because this endpoint does anything with them today beyond accepting them.
-
-        Raises HTTP 422 (not 500) if no page can be detected in the submitted image -- a real,
-        expected outcome for a bad photo, per `PageDetectionFailed`'s own doc, not a server error.
+        The body is the raw image bytes, avoiding JSON or multipart overhead on the
+        largest payload. `session_id`/`sequence_index` are part of the documented
+        contract but not used yet. Returns 422, not 500, for an undecodable image or
+        a photo with no detectable page.
         """
-        # Accepted per the documented contract; not yet used by the pipeline -- see docstring.
+        # Part of the contract, not used yet.
         del session_id, sequence_index
         image_bytes = await request.body()
         try:

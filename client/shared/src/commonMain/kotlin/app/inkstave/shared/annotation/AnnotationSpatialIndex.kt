@@ -3,34 +3,19 @@ package app.inkstave.shared.annotation
 import kotlin.math.floor
 
 /**
- * A uniform-grid spatial index over one page's [AnnotationItem]s, built so
- * [query] (viewport culling) and [hitTest] (tap-to-select) are sub-linear
- * in item count rather than an O(n) scan per interaction --
- * `docs/performance.md`'s "hundreds of annotation objects, no visible
- * stutter" requirement.
+ * A uniform-grid spatial index over one page's [AnnotationItem]s, so viewport culling ([query])
+ * and tap-to-select ([hitTest]) don't scan every item (`docs/performance.md`).
  *
- * A uniform grid, not a quad-tree, is the deliberate choice here: this
- * project's annotation counts are bounded (hundreds per page, per the
- * performance target -- not the millions of points a quad-tree's adaptive
- * depth earns its complexity for), and a grid's bucket lookup is exact
- * arithmetic with no tree traversal, simpler to reason about and to test.
- * If a page ever needs to scale well past "hundreds," a quad-tree becomes
- * the right trade; not needed for M2.
- *
- * Each item is inserted into every grid cell its [AnnoBounds] overlaps (an
- * item spanning multiple cells appears in each), so both [query] and
- * [hitTest] only ever need to look at the (small, bounded) set of cells the
- * query region touches -- never every item on the page.
+ * A grid rather than a quad-tree: pages hold hundreds of items, not millions, and a grid is
+ * simpler. Each item is stored in every cell its bounds overlap.
  */
 class AnnotationSpatialIndex private constructor(
     private val cellSizePt: Double,
     private val buckets: Map<Pair<Int, Int>, List<AnnotationItem>>,
-    /** Every item this index was built from, in their original (z-)order -- see [AnnotationItem]'s z-order note. */
+    /** Every item this index was built from, in z-order (see [AnnotationItem]). */
     val items: List<AnnotationItem>,
 ) {
-    // Precomputed once, not recomputed per hitTest call: id -> position in `items`,
-    // so hitTest's z-order tie-break is an O(1) lookup per candidate rather than an
-    // indexOf scan over the whole page's items for every candidate in the cell.
+    // id -> position in `items`, so hitTest's z-order tie-break is a lookup, not a scan.
     private val orderById: Map<String, Int> = items.withIndex().associate { (index, item) -> item.id to index }
 
     /** All items whose [AnnoBounds] intersect [queryBounds], each appearing exactly once even if it spans multiple grid cells. */
@@ -48,12 +33,8 @@ class AnnotationSpatialIndex private constructor(
     }
 
     /**
-     * The topmost (per [AnnotationItem]'s z-order) item whose bounds
-     * contain ([x], [y]), or `null` if none do. Only inspects the single
-     * grid cell containing the point -- correct, not just fast, because an
-     * item is inserted into *every* cell its bounds overlap, so if an
-     * item's bounds contain this point, this cell is necessarily one of
-     * them.
+     * The topmost item whose bounds contain ([x], [y]), or `null`. Checking only the point's own
+     * cell is enough, because every item is stored in every cell its bounds overlap.
      */
     fun hitTest(
         x: Double,
@@ -94,14 +75,7 @@ class AnnotationSpatialIndex private constructor(
     }
 
     companion object {
-        /**
-         * Default grid cell size: `PagePointSpace.CANVAS_HEIGHT_PT / 10`, i.e.
-         * a page is roughly a 10x10 grid vertically. Not tuned against real
-         * usage data yet (there isn't any) -- a reasonable starting bucket
-         * granularity for a page-point space of that scale, coarse enough
-         * that most annotation objects (which are small relative to a full
-         * page) fall into one or a handful of cells rather than dozens.
-         */
+        /** A tenth of the page height, so most items fall into one or a few cells. Not yet tuned. */
         const val DEFAULT_CELL_SIZE_PT = PagePointSpace.CANVAS_HEIGHT_PT / 10
 
         fun build(

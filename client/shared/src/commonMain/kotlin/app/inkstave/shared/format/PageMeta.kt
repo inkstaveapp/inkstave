@@ -12,14 +12,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /**
- * A page's `pages/<page-id>.meta.json` (see `docs/format-spec.md`,
- * "`pages/<page-id>.meta.json`"). For an M1-imported page, [processing] and
- * [ocr] are `null` -- nothing has run the cleanup/OCR pipeline yet, that's
- * M4's job (`docs/image-pipeline.md`) -- and [aspectRatioClass] is
- * `"custom"`, since no aspect-ratio normalization has happened either.
+ * A page's `pages/<page-id>.meta.json` (`docs/format-spec.md`). For a page that hasn't been through
+ * the cleanup pipeline, [processing] and [ocr] are `null` and [aspectRatioClass] is `"custom"`.
  *
- * [unknownFields] preserves any JSON object keys this model doesn't
- * recognise yet; see [Manifest.unknownFields].
+ * [unknownFields] preserves unrecognised keys; see [Manifest.unknownFields].
  */
 @Serializable
 data class PageMeta(
@@ -59,10 +55,7 @@ data class PageOcr(
 /** JSON object keys [PageMeta] models directly; everything else is an "unknown field". */
 private val KNOWN_PAGE_META_KEYS = setOf("id", "width", "height", "aspectRatioClass", "processing", "ocr")
 
-/**
- * Reads and writes [PageMeta] as `<page-id>.meta.json` text, preserving
- * unrecognised keys. See [ManifestJson] -- same approach.
- */
+/** Reads and writes [PageMeta] as JSON, preserving unrecognised keys (same approach as [ManifestJson]). */
 object PageMetaJson {
     private val json =
         Json {

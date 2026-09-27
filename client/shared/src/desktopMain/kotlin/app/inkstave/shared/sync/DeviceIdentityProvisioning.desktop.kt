@@ -38,15 +38,9 @@ private fun loadMetadata(settingsDirectory: File): DesktopIdentityMetadata? {
 }
 
 /**
- * Generates a fresh identity: a random device ID, a best-effort display name (this machine's own
- * hostname, falling back to a generic name if that's unavailable -- e.g. no reverse-DNS/hosts
- * entry in a sandboxed environment -- since a missing display name shouldn't block identity
- * creation entirely), a random keystore password (this keystore protects a *sync* identity key,
- * not anything more sensitive, and lives in a directory only this user account can already read,
- * the same trust model `PedalSettingsStore`'s unencrypted settings file already relies on -- the
- * password exists because `keytool`/`KeyStore` require one, not as a meaningful secret boundary
- * on its own), and a self-signed certificate via `keytool` (this module's doc explains why
- * `keytool` specifically, not a library).
+ * Generates a fresh identity: a random device ID, the hostname as display name (with a fallback),
+ * and a self-signed EC certificate created by `keytool`. The random keystore password exists only
+ * because PKCS12 requires one; the real protection is the user-only settings directory.
  */
 private fun provisionNewIdentity(settingsDirectory: File): DesktopIdentityMetadata {
     settingsDirectory.mkdirs()

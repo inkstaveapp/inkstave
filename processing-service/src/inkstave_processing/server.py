@@ -1,9 +1,7 @@
-"""Entry point: runs the service bound to loopback only.
+"""Entry point: runs the service on loopback only.
 
-Per ``docs/image-pipeline.md``: "The service exposes a local API
-(loopback-only; never bound to a network-reachable interface)". Binding to
-``127.0.0.1`` rather than ``0.0.0.0`` is a security requirement, not a
-default to change casually -- see ``.claude/agents/image-pipeline.md``.
+Binding to ``127.0.0.1`` rather than ``0.0.0.0`` is a security requirement:
+the service must never be reachable from the network.
 """
 
 from __future__ import annotations

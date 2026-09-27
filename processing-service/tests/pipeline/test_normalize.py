@@ -41,11 +41,10 @@ def test_normalize_page_on_an_already_a4_image_needs_no_padding() -> None:
 
 
 def test_normalize_page_pads_a_near_a4_image_to_the_exact_ratio_without_cropping() -> None:
-    # Slightly short of true A4 (within classify_aspect_ratio's tolerance) -- should be padded,
-    # not cropped or stretched, to land on the exact ratio.
+    # Within tolerance of A4: padded, not cropped or stretched, to the exact ratio.
     width, height = 600, round(600 * _A4_RATIO * 0.99)
     image = _solid_image(width, height)
-    image[10:20, 10:20] = 0  # a marker so we can confirm it's still present (not cropped away)
+    image[10:20, 10:20] = 0  # marker that must survive
 
     result = normalize_page(image, long_edge_px=1000)
 

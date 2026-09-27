@@ -6,13 +6,9 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 
 /**
- * [CaptureSessionMessage]'s wire encoding: a 1-byte type discriminant followed by that message's
- * own fields, all inside one [MessageFraming] frame. Kept as a tiny hand-written codec, not
- * `kotlinx.serialization`'s binary format(s) -- `Photo.bytes` (a raw photo, up to several
- * megabytes) going through a general-purpose serialization framework's binary encoding would add
- * real overhead this simple, fixed, three-message-type protocol doesn't need; `PickedFile`/`.smpk`
- * elsewhere in this codebase use `kotlinx.serialization` because *their* payloads are genuinely
- * general-shaped JSON documents, not because it's this project's only acceptable encoding.
+ * Wire encoding of [CaptureSessionMessage]: a 1-byte type followed by the message's fields, inside one
+ * [MessageFraming] frame. Hand-written rather than kotlinx.serialization to avoid overhead on
+ * multi-megabyte photo payloads in a fixed three-message protocol.
  */
 object CaptureSessionWire {
     private const val TYPE_SESSION_START: Byte = 1

@@ -43,22 +43,11 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Discover, pair with, and manage trust for sync peers (`ROADMAP.md` M4, `docs/sync-protocol.md`)
- * -- the UI half of `app.inkstave.shared.sync`'s pairing protocol (`PairingSession`/
- * `PairingServer`/`JmDnsSyncDiscovery`/`PeerTrustStore`, all thoroughly tested at the protocol
- * level in `jvmCommonTest`/`desktopTest`; this screen is the thin orchestration layer on top).
+ * Discovers, pairs with, and manages trust for sync peers: the UI over `PairingSession`, `PairingServer`,
+ * `JmDnsSyncDiscovery` and `PeerTrustStore` (`docs/sync-protocol.md`).
  *
- * While this screen is open, this device does two things at once, deliberately symmetric rather
- * than a mode the user picks (`docs/sync-protocol.md` describes pairing as "one device displays a
- * ... code, the other enters/scans it" without mandating which role either device takes): it
- * advertises itself and listens for an incoming pairing attempt ([PairingServer]), and it browses
- * for other advertised devices the user can tap "Pair" on to initiate a connection themselves
- * ([PairingSession.initiate]). Whichever happens first surfaces the same confirmation UI.
- *
- * **Not yet wired into a UI test**: real Compose UI interaction testing hits the same pre-existing
- * `compose.uiTest`/Skiko native-library issue every other UI test in this codebase already does
- * (`client/README.md`'s "Known rough edges") -- not a new gap this screen introduces. The
- * pairing/discovery/trust logic it orchestrates is fully tested at the protocol level instead.
+ * While open, the device both advertises and accepts incoming pairing attempts ([PairingServer]) and browses for
+ * devices the user can pair with ([PairingSession.initiate]); either direction leads to the same confirmation UI.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,32 +64,20 @@ fun PairingScreen(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Advertise + accept + browse for the lifetime of this screen; torn down on dispose so this
-    // device stops being discoverable/pairable the moment the user navigates away, per
-    // docs/sync-protocol.md's "discovery of an unpaired device only offers 'pair with this
-    // device'" -- that offer itself shouldn't stand indefinitely in the background either.
+    // Advertise, accept and browse only while this screen is open, so the device stops being pairable
+    // the moment the user leaves.
     DisposableEffect(Unit) {
         val acceptLoopRunning = AtomicBoolean(true)
         val disposed = AtomicBoolean(false)
         var discovery: SyncDiscovery? = null
         var server: PairingServer? = null
         var acceptThread: Thread? = null
-        // Android only (desktop's default null means "nothing to hold") -- must be acquired
-        // before JmDnsSyncDiscovery.create()'s advertise/browse calls have anything meaningful
-        // to do, and released on dispose alongside discovery/server. See App's own doc on this
-        // parameter for why it exists at all: a real-device test caught that without it, mDNS
-        // replies would plausibly be silently dropped by Android's WiFi stack.
+        // Android only: must be held before advertising/browsing, or incoming mDNS replies are dropped.
         var multicastLock: AutoCloseable? = null
 
-        // Everything below -- JmDnsSyncDiscovery.create() especially -- does blocking I/O
-        // (JmDNS's own setup does a DNS lookup via InetAddress.getLocalHost(); PairingServer's
-        // construction touches the on-disk TLS keystore). A DisposableEffect body runs
-        // synchronously on the composing/UI thread and can't use withContext the way a suspend
-        // call site (e.g. LibraryScreen's sendCaptureSession wiring) already correctly does --
-        // calling JmDnsSyncDiscovery.create() directly here crashed on real Android hardware with
-        // NetworkOnMainThreadException, a bug only real-device testing could catch (every prior
-        // test of this exercised it from a plain JVM test, which has no such restriction). Running
-        // all of this setup on its own background thread instead fixes it.
+        // Setup does blocking I/O (JmDNS resolves the local host name; PairingServer reads the keystore), and a
+        // DisposableEffect body runs on the UI thread, where Android throws NetworkOnMainThreadException. So it
+        // runs on its own thread.
         val setupThread =
             Thread {
                 val createdLock = acquireMulticastLock?.invoke()
@@ -111,18 +88,9 @@ fun PairingScreen(
                     object : SyncDeviceListener {
                         override fun onDeviceFound(device: DiscoveredDevice) {
                             if (device.deviceId == localIdentity.deviceId) return
-                            // Keyed by (deviceId, port), not deviceId alone: the *same* physical
-                            // device can legitimately advertise two live, differently-ported
-                            // services at once under one deviceId -- e.g. this very screen's own
-                            // ephemeral PairingServer (roles=capture,processing, trust-any-cert,
-                            // meant for exactly this handshake) alongside a desktop's permanent
-                            // Main.kt SyncServer (roles=processing, pinned-trust only, rejects any
-                            // not-yet-paired device). Deduping by deviceId alone let whichever
-                            // record resolved last silently overwrite the other, so a tap on the
-                            // only visible row could connect to the wrong listener entirely --
-                            // found via a real phone pairing attempt whose desktop-side log showed
-                            // the connection landing on the permanent SyncServer's thread, rejected
-                            // with "not a paired peer," while a PairingServer was in fact also live.
+                            // Keyed by (deviceId, port): one device can advertise two listeners under one deviceId, such as
+                            // this ephemeral PairingServer and a desktop's permanent pinned-trust SyncServer. Deduping by
+                            // deviceId alone let one overwrite the other, so a tap could pair with the wrong listener.
                             discoveredDevices =
                                 discoveredDevices.filterNot { it.deviceId == device.deviceId && it.port == device.port } + device
                         }
@@ -134,9 +102,7 @@ fun PairingScreen(
                 )
 
                 if (disposed.get()) {
-                    // The screen was already left by the time setup finished -- onDispose ran
-                    // against still-null discovery/server/multicastLock, so close what was just
-                    // opened here instead of leaking it.
+                    // The screen was left before setup finished, so onDispose saw nothing to close: close it here.
                     createdServer.close()
                     createdDiscovery.close()
                     createdLock?.close()
@@ -152,9 +118,7 @@ fun PairingScreen(
                                 try {
                                     createdServer.acceptOne(localIdentity)
                                 } catch (e: IOException) {
-                                    // server.close() (below, on dispose) unblocks the in-progress
-                                    // accept() call with exactly this exception -- the expected
-                                    // way this loop ends, not a failure to report.
+                                    // server.close() on dispose unblocks accept() with this exception: the normal way out.
                                     break
                                 }
                             pendingConfirmation = outcome as? PairingOutcome.AwaitingConfirmation
@@ -241,10 +205,7 @@ fun PairingScreen(
                     items(discoveredDevices, key = { "${it.deviceId}:${it.port}" }) { device ->
                         ListItem(
                             headlineContent = { Text(device.displayName) },
-                            // Surfaces which port this entry actually is -- the same deviceId can
-                            // now appear as more than one row (see onDeviceFound's doc), and
-                            // without this the two would be visually indistinguishable, making it
-                            // a coin flip which one a tap actually pairs with.
+                            // Shows roles so two rows for the same device (see onDeviceFound) can be told apart.
                             supportingContent = { Text("roles: ${device.roles.sorted().joinToString(", ")}") },
                             trailingContent = {
                                 TextButton(

@@ -1,8 +1,6 @@
 """Typed Python models and JSON Schema validation for the Inkstave .smpk format.
 
-See ``docs/format-spec.md`` in the repository root for the authoritative
-prose specification this package mirrors, and ``docs/coding-standards.md``
-for why these are typed models rather than raw ``dict`` parsing.
+``docs/format-spec.md`` is the authoritative specification this mirrors.
 """
 
 from inkstave_format.io import dump_json, parse_json

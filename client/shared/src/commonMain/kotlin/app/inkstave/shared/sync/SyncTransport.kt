@@ -1,11 +1,8 @@
 package app.inkstave.shared.sync
 
 /**
- * An open, authenticated channel to a paired peer, carrying [CaptureSessionMessage]s
- * (`docs/sync-protocol.md`'s "Capture session"). [send]/[receive] are blocking (this project's
- * only transport, [LanSyncTransport], is a plain TLS socket -- callers run session I/O on a
- * background thread/`Dispatchers.IO`, the same pattern `LibraryScreen.runImport` already uses for
- * other blocking I/O).
+ * An open, authenticated channel to a paired peer carrying [CaptureSessionMessage]s. [send] and
+ * [receive] block, so callers run them off the main thread.
  */
 interface SyncConnection : AutoCloseable {
     fun send(message: CaptureSessionMessage)
@@ -14,17 +11,13 @@ interface SyncConnection : AutoCloseable {
 }
 
 /**
- * The transport abstraction `docs/architecture.md`/`docs/decisions/0003-sync-approach.md` calls
- * for: upper-layer sync/session logic depends on this interface, not directly on "a TLS socket,"
- * so a future relay/cloud transport (ADR-0003's explicitly-deferred future work) can be a second
- * implementation of this same interface without the capture-session logic built on top of it
- * changing. `LanSyncTransport` (`jvmCommon`) is the only implementation for v1.
+ * The transport abstraction from ADR-0003: session logic depends on this, not on a TLS socket, so a
+ * future relay/cloud transport can be added as another implementation. `LanSyncTransport` is the
+ * only one today.
  */
 interface SyncTransport {
-    /** Opens a connection to [peer] at [host]:[port] (typically from a recent `DiscoveredDevice`), authenticated
-     * via [peer]'s pinned certificate fingerprint -- throws if the device actually reachable at that address
-     * doesn't present that exact certificate (see `LanSyncTransport.connect`'s doc for why that check exists
-     * even though the peer is already in the trust store). */
+    /** Opens a connection to [peer] at [host]:[port], authenticated by [peer]'s pinned certificate
+     * fingerprint. Throws if the device at that address does not present exactly that certificate. */
     fun connect(
         peer: TrustedPeer,
         host: String,

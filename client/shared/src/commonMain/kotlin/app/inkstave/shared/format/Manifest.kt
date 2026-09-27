@@ -12,18 +12,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /**
- * The v1 `manifest.json` contained in a `.smpk` score package
- * (see `docs/format-spec.md`, "`manifest.json`" section).
+ * The v1 `manifest.json` of a `.smpk` package (`docs/format-spec.md`); fields mirror the spec.
  *
- * Every field mirrors the spec exactly. [unknownFields] carries any JSON
- * object keys this version of the model does not recognise, captured
- * verbatim from the source so they survive a read-modify-write round trip.
- * The format spec requires this ("Unknown fields are always preserved on
- * read-modify-write, never dropped") so that, for example, a future OMR
- * integration can attach data older clients don't understand yet without
- * those clients silently deleting it when they save. Application code
- * should never read or set [unknownFields] itself -- it exists only to be
- * carried through unchanged by [ManifestJson].
+ * [unknownFields] holds keys this model doesn't recognise, so they survive read-modify-write: the
+ * format requires unknown fields are never dropped, so newer clients' data isn't deleted by older
+ * ones. Only [ManifestJson] should touch it.
  */
 @Serializable
 data class Manifest(
@@ -44,13 +37,7 @@ data class Manifest(
     val unknownFields: Map<String, JsonElement> = emptyMap(),
 )
 
-/**
- * `manifest.json`'s `source` object. [details] is deliberately untyped JSON
- * rather than a sealed hierarchy: its shape depends on [type] and the spec
- * describes it only as "type-specific, e.g. original filename" without
- * enumerating every field yet -- modelling it strictly now would mean
- * guessing at a schema the format doesn't actually define.
- */
+/** `manifest.json`'s `source` object. [details] is untyped JSON because the spec leaves its shape to each [type]. */
 @Serializable
 data class ManifestSource(
     val type: String,
@@ -76,14 +63,9 @@ private val KNOWN_MANIFEST_KEYS =
     )
 
 /**
- * Reads and writes [Manifest] as `manifest.json` text, preserving any JSON
- * object keys this codebase doesn't model yet (see [Manifest.unknownFields]).
- *
- * A plain `@Serializable data class` alone cannot satisfy this:
- * kotlinx.serialization silently drops unrecognised keys on decode, which
- * would violate `docs/format-spec.md`'s forward-compatibility guarantee.
- * This object instead decodes to a raw [JsonObject] first, splits it into
- * known and unknown keys, and re-merges them on encode.
+ * Reads and writes [Manifest] as JSON, preserving unrecognised keys ([Manifest.unknownFields]).
+ * kotlinx.serialization drops unknown keys on decode, so this splits the raw [JsonObject] into known
+ * and unknown keys and merges them back on encode.
  */
 object ManifestJson {
     private val json =

@@ -44,31 +44,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The library screen (`ROADMAP.md` M1: "Basic library screen ... backed by
- * the local index database"): lists every score from [index] -- never by
- * scanning `.smpk` files on load, per ADR-0005 -- and offers importing a
- * PDF or a set of images via [pickPdf]/[pickImages] + [importer]. Tapping a
- * row opens that score in the viewer via [onOpenScore]. The top bar's
- * "Pedal Settings" action ([onOpenPedalSettings], `ROADMAP.md` M3) is the
- * one navigation entry point into [PedalSettingsScreen] -- there's no
- * other settings surface yet for it to live under.
+ * Lists every score from [index] (never by scanning `.smpk` files, per ADR-0005) and imports PDFs or image sets
+ * via [pickPdf]/[pickImages] and [importer]. Tapping a row opens it via [onOpenScore].
  *
- * [captureImages] (`ROADMAP.md` M4) adds a third "Capture photos" import
- * option alongside PDF/images when non-`null` (Android only, as of M4 --
- * `null` on desktop, which has no in-app camera flow). Its result normally
- * feeds [importer]'s existing [LibraryImporter.importImages] path -- the
- * exact same code M1's "import a set of images" already uses, whether the
- * images came from the system picker or the camera -- **unless** at least
- * one peer is paired ([trustStore]) and [sendCaptureSession] is non-`null`
- * (Android only, same reasoning as [captureImages]), in which case the user
- * is asked whether to send the batch to that peer instead
- * (`CaptureSessionSender`, `docs/sync-protocol.md`) or still import it
- * locally -- local import is always offered and is the safe default if the
- * send fails or the dialog is dismissed, per this integration's "local
- * first, sync later" scope decision (never lose a just-captured batch).
- * Picking a specific peer when more than one is paired isn't built yet --
- * this always offers [trustStore]'s first entry; real future work if that
- * becomes a real need, not attempted in this pass.
+ * [captureImages] adds a "Capture photos" import option when non-`null`. Captured photos are imported locally,
+ * unless a peer is paired ([trustStore]) and [sendCaptureSession] is set: then the user can send the batch to the
+ * first paired peer instead. Local import is always the fallback, if sending fails or the dialog is dismissed, so
+ * a captured batch is never lost.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,9 +73,7 @@ fun LibraryScreen(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Picks up scores imported elsewhere (e.g. a future sync receive) while this
-    // screen is visible -- cheap, since it's just an indexed SQL query (ADR-0005),
-    // not a filesystem scan.
+    // Picks up scores added elsewhere while this screen is visible; cheap, it's an indexed query.
     LaunchedEffect(Unit) { scores = index.listAll() }
 
     fun runImport(action: suspend () -> Unit) {
@@ -135,12 +115,7 @@ fun LibraryScreen(
             )
         }
 
-    // A capture session's photos have no meaningful filename to derive a title guess from
-    // (CameraCapture.kt names them opaquely, "capture-1.jpg", ...) -- unlike importPdfAction/
-    // importImagesAction above, so this always falls back to "Untitled" rather than the
-    // filename-derived guess those use. Correcting the title is exactly what M4's still-pending
-    // OCR-confirmation UI (ROADMAP.md) will eventually help with; M4's camera-capture slice on
-    // its own doesn't have a better signal to offer yet.
+    // Captured photos have opaque filenames ("capture-1.jpg"), so there's no title to guess: always "Untitled".
     fun importLocally(captured: List<PickedFile>) =
         runImport {
             importer.importImages(title = "Untitled", imageFiles = captured.map { it.bytes })
@@ -152,8 +127,7 @@ fun LibraryScreen(
             val captured = withContext(Dispatchers.IO) { capture() }
             if (captured.isEmpty()) return@launch
             if (sendCaptureSession != null && trustStore != null && trustStore.list().isNotEmpty()) {
-                // Ask -- see this function's doc for why local import is always the fallback, never
-                // a silently-lost batch.
+                // Ask; local import stays the fallback (see this function's doc).
                 pendingCaptureChoice = captured
             } else {
                 importLocally(captured)
@@ -181,9 +155,7 @@ fun LibraryScreen(
                     statusMessage = "Couldn't send to ${peer.displayName} (${outcome.reason}) -- importing locally instead."
                 }
             }
-            // Both failure outcomes above fall back to local import, same "never lose a just
-            // -captured batch" reasoning as dismissing the dialog outright -- only a confirmed Sent
-            // skips it, since the photos already have a home on the peer's device.
+            // Only a confirmed send skips local import, so a failed send never loses the batch.
             if (outcome !is CaptureSessionSendOutcome.Sent) importLocally(captured)
         }
     }
@@ -300,13 +272,7 @@ private fun EmptyLibrary(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Stable Compose `testTag` identifiers for [LibraryScreen] and [ViewerScreen],
- * kept in one place so UI tests (`client/shared/src/desktopTest/.../ui/`)
- * reference the same constants the composables set, rather than duplicating
- * tag strings that could silently drift apart. Not part of this module's
- * public API surface for app code -- UI tests only.
- */
+/** Compose `testTag` identifiers shared by the screens and their UI tests, so the two can't drift apart. */
 internal object TestTags {
     const val IMPORT_FAB = "library-fab-import"
     const val IMPORT_PDF_MENU_ITEM = "library-menu-import-pdf"

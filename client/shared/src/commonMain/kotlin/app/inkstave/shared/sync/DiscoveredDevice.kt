@@ -1,16 +1,11 @@
 package app.inkstave.shared.sync
 
 /**
- * A device advertised on the local network (`docs/sync-protocol.md`'s "Discovery"), before any
- * trust decision has been made about it -- discovery alone never grants access
- * ("Discovery only lists devices; it does not by itself grant any access"). [hosts]/[port] are
- * where to connect to actually pair with or sync to this device; [roles] mirrors the discovered
- * service's advertised roles (`"capture"`, `"processing"`, or both -- a laptop can be both, per
- * that doc).
+ * A device advertised on the local network, before any trust decision: discovery never grants
+ * access by itself. [roles] are the advertised roles (`capture`, `processing`, or both).
  *
- * [hosts] is a list because one device is often reachable at several addresses at once (a
- * desktop with both Ethernet and Wi-Fi advertises on each). It is never empty, in preference
- * order; callers try each in turn until one is reachable (`firstReachable`).
+ * [hosts] lists every address the device was seen at (one per network interface), never empty, in
+ * preference order; callers try each until one is reachable (`firstReachable`).
  */
 data class DiscoveredDevice(
     val deviceId: String,
@@ -30,12 +25,7 @@ object DeviceRole {
     const val PROCESSING = "processing"
 }
 
-/**
- * Discovery events as they arrive (`SyncDiscovery.browse`) -- a callback interface rather than a
- * `kotlinx.coroutines.Flow`, matching this codebase's existing preference for the simplest
- * mechanism that fits (`docs/coding-standards.md`'s "don't build speculative abstractions") over
- * a heavier reactive-stream API two callback methods don't need.
- */
+/** Discovery events from `SyncDiscovery.browse`, delivered as they arrive. */
 interface SyncDeviceListener {
     /** [device] was just advertised, or its advertised info changed. */
     fun onDeviceFound(device: DiscoveredDevice)
@@ -45,11 +35,9 @@ interface SyncDeviceListener {
 }
 
 /**
- * LAN device discovery (`docs/sync-protocol.md`'s "Discovery") -- kept as an interface, the same
- * `SyncTransport`-shaped spirit ADR-0003 asks for at the transport layer, so a future discovery
- * mechanism (relevant only if a future relay/cloud transport ever needs its own device-listing
- * story) could satisfy this without upper-layer pairing/UI code changing. `JmDnsSyncDiscovery`
- * (`jvmCommon`) is the only implementation for v1.
+ * LAN device discovery (`docs/sync-protocol.md`). An interface, like [SyncTransport], so another
+ * discovery mechanism could replace mDNS without changing pairing or UI code; `JmDnsSyncDiscovery`
+ * is the implementation.
  */
 interface SyncDiscovery : AutoCloseable {
     /** Advertises this device as [identity], reachable on [port], offering [roles]. */

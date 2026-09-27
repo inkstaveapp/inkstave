@@ -1,25 +1,9 @@
-"""A fully-typed wrapper around every OpenCV call the pipeline uses.
+"""Typed wrappers for every OpenCV call the pipeline uses.
 
-`docs/coding-standards.md` requires strict typing everywhere, including
-Python, with no `Any` used to dodge modeling a type. `opencv-python-headless`
-(pinned in `pyproject.toml`; see `NOTICE.md`) ships real `.pyi` stubs, which
-is better than historical versions of this package -- but they're not
-precise: OpenCV's C++ API is heavily overloaded and dtype-polymorphic in ways
-the stubs approximate with wide unions (`ndarray[Any, dtype[integer[Any] |
-floating[Any]]]` and similar) rather than pinning down, for instance, "this
-function takes and returns `uint8`" the way this pipeline actually always
-uses it.
-
-Every function below has a precise, hand-written signature (using
-`inkstave_processing.pipeline.types.ImageU8` and friends) and does whatever
-narrow `.astype()`/`cast()` is needed to make good on it -- callers elsewhere
-in the pipeline never import `cv2` directly or see its looser inferred
-types. Where OpenCV's own runtime behavior (not just its stub types) is what
-we're relying on -- e.g. that `cv2.findContours` really does return
-integer-coordinate points -- that's asserted via `.astype()` rather than
-trusted blindly, so a future OpenCV version behaving differently would be
-caught by a `ValueError`/shape mismatch in a test, not silently produce
-wrong output.
+OpenCV's stubs use wide dtype unions, so each wrapper gives a precise
+signature and converts with `.astype()`. The rest of the pipeline never
+imports `cv2`, and if OpenCV's runtime behaviour changed, a test would fail
+on a dtype or shape mismatch rather than produce wrong output silently.
 """
 
 from __future__ import annotations
@@ -30,9 +14,7 @@ from numpy.typing import NDArray
 
 from inkstave_processing.pipeline.types import ImageU8
 
-#: A separate alias from `ImageU8` (both ultimately back onto `numpy.float32`/`uint8` arrays)
-#: purely for readability at call sites that deal in point coordinates rather than pixel
-#: intensities -- contours, corners, remap grids.
+#: Float32 arrays of point coordinates (contours, corners, remap grids).
 NDArrayF32 = NDArray[np.float32]
 
 
@@ -56,9 +38,8 @@ def canny_edges(image: ImageU8, low_threshold: float, high_threshold: float) -> 
 
 
 def find_largest_contour(edge_image: ImageU8) -> NDArrayF32 | None:
-    """The largest external contour in a binary edge map, as an `(n, 2)` float32 array of `(x, y)`
-    points, or `None` if the image has no contours at all (a blank/uniform input -- degenerate,
-    not an error)."""
+    """The largest external contour in an edge map as `(n, 2)` float32 points, or
+    `None` if there are none (e.g. a blank image)."""
     contours, _ = cv2.findContours(edge_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
         return None
@@ -72,9 +53,8 @@ def contour_area(contour: NDArrayF32) -> float:
 
 
 def approx_polygon(contour: NDArrayF32, epsilon_fraction: float) -> NDArrayF32:
-    """`contour` simplified via Douglas-Peucker to (ideally) its corner points. `epsilon_fraction`
-    is the simplification tolerance as a fraction of the contour's perimeter -- larger merges more
-    points away."""
+    """`contour` simplified with Douglas-Peucker; `epsilon_fraction` is the
+    tolerance as a fraction of the perimeter."""
     perimeter = cv2.arcLength(contour.astype(np.float32), closed=True)
     epsilon = epsilon_fraction * perimeter
     approx = cv2.approxPolyDP(contour.astype(np.float32), epsilon, closed=True)
@@ -86,9 +66,8 @@ def remap_image(
     map_x: NDArrayF32,
     map_y: NDArrayF32,
 ) -> ImageU8:
-    """Resamples `image` at `map_x`/`map_y` (each `(out_h, out_w)`, giving each output pixel's
-    *source* coordinate) via bilinear interpolation -- the primitive
-    `geometry.geometric_correct`'s mesh warp is built on."""
+    """Bilinearly resamples `image`; `map_x`/`map_y` give each output pixel's
+    source coordinate. Out-of-range areas are white."""
     return cv2.remap(
         image,
         map_x,
@@ -99,17 +78,15 @@ def remap_image(
 
 
 def apply_clahe(image: ImageU8, clip_limit: float, tile_grid_size: int) -> ImageU8:
-    """Contrast-Limited Adaptive Histogram Equalization on a grayscale `image` -- local contrast
-    enhancement that (unlike global histogram equalization) doesn't blow out unevenly-lit photos
-    into uniform noise."""
+    """CLAHE on a grayscale image: local contrast enhancement that, unlike global
+    equalisation, doesn't blow unevenly lit photos out into noise."""
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_grid_size, tile_grid_size))
     return clahe.apply(image).astype(np.uint8)
 
 
 def adaptive_threshold(image: ImageU8, block_size: int, constant: float) -> ImageU8:
-    """Per-region binarization of a grayscale `image` (0 or 255 per pixel) -- Gaussian-weighted
-    local mean minus `constant`, so it copes with uneven lighting far better than one global
-    threshold would."""
+    """Binarises a grayscale image against a Gaussian-weighted local mean minus
+    `constant`, which copes with uneven lighting better than a global threshold."""
     if block_size <= 1 or block_size % 2 == 0:
         raise ValueError(f"block_size must be an odd integer > 1, got {block_size}")
     return cv2.adaptiveThreshold(
@@ -123,17 +100,14 @@ def adaptive_threshold(image: ImageU8, block_size: int, constant: float) -> Imag
 
 
 def resize_image(image: ImageU8, width: int, height: int) -> ImageU8:
-    """Resizes `image` to exactly `(height, width)` via area-based interpolation (the appropriate
-    choice for downscaling a photo; for the modest upscales this pipeline does, it's still a
-    reasonable, artifact-free default)."""
+    """Resizes `image` to `(height, width)` with area interpolation, best for
+    downscaling and artefact-free for small upscales."""
     return cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA).astype(np.uint8)
 
 
 def decode_image(encoded_bytes: bytes) -> ImageU8:
-    """Decodes `encoded_bytes` (a whole PNG/JPEG/etc. file's bytes, as received over HTTP) into a
-    `(h, w, 3)` BGR `ImageU8` -- the same format every other function in this module produces and
-    consumes. Raises `ValueError` if the bytes aren't a decodable image, rather than returning
-    `None`/a malformed array for a caller to trip over later."""
+    """Decodes image file bytes (PNG, JPEG, ...) to a BGR `ImageU8`. Raises
+    `ValueError` if the bytes aren't a decodable image."""
     buffer = np.frombuffer(encoded_bytes, dtype=np.uint8)
     decoded = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
     if decoded is None:
@@ -142,8 +116,7 @@ def decode_image(encoded_bytes: bytes) -> ImageU8:
 
 
 def encode_png(image: ImageU8) -> bytes:
-    """Encodes `image` (grayscale or BGR) as PNG file bytes -- the inverse of `decode_image` for
-    the output side, and the same codec `docs/format-spec.md` specifies for `pages/<id>.png`."""
+    """Encodes a grayscale or BGR image as PNG bytes (the `.smpk` page format)."""
     ok, buffer = cv2.imencode(".png", image)
     if not ok:
         raise ValueError("failed to encode image as PNG")
@@ -157,8 +130,7 @@ def pad_image(
     left: int,
     right: int,
 ) -> ImageU8:
-    """Pads `image` with white borders of the given pixel widths (letterboxing, not stretching --
-    see `normalize.normalize_page`)."""
+    """Pads `image` with white borders of the given widths (for letterboxing)."""
     return cv2.copyMakeBorder(
         image,
         top,

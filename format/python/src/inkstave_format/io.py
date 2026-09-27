@@ -1,9 +1,5 @@
-"""Convenience JSON (de)serialization for Inkstave format models.
-
-Plain ``model.model_dump_json()`` is not enough on its own: without
-``by_alias=True`` it would emit Python's snake_case field names instead of
-the format's camelCase JSON keys (see ``models.py``). These helpers wrap
-that so callers don't have to remember the flag.
+"""JSON helpers for the format models, which always write camelCase keys
+(`model_dump_json()` alone would emit snake_case).
 """
 
 from __future__ import annotations

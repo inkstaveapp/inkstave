@@ -3,19 +3,10 @@ package app.inkstave.shared.annotation
 import app.inkstave.shared.format.AnnotationLayer
 
 /**
- * Undo/redo for one page's [AnnotationLayer], as a capped history of full
- * -layer snapshots. Chosen over fine-grained command objects (the more
- * "proper" long-term design) because a page's annotation layer is bounded
- * in size (hundreds of objects, per `docs/performance.md`'s own target --
- * not unbounded), so a whole-layer snapshot per edit is cheap: Kotlin's
- * immutable `List`s mean an edit that only changes one stroke still shares
- * every *other* list element by reference with the previous snapshot, not
- * a deep copy. Simple, obviously correct (undo restores exactly the prior
- * snapshot, nothing to reconstruct), and easy to test. Revisit only if a
- * future pass finds snapshot memory use is an actual measured problem.
+ * Undo/redo for one page's [AnnotationLayer], as a capped stack of whole-layer snapshots. Snapshots
+ * are cheap because layers are small and immutable lists share unchanged elements.
  *
- * Not thread-safe -- used from a single Compose UI's state, same as every
- * other piece of mutable UI state in this codebase.
+ * Not thread-safe; used from UI state only.
  */
 class AnnotationHistory(
     initial: AnnotationLayer,
@@ -24,11 +15,11 @@ class AnnotationHistory(
     private val undoStack = ArrayDeque<AnnotationLayer>()
     private val redoStack = ArrayDeque<AnnotationLayer>()
 
-    /** The current layer -- what should actually be rendered/saved right now. */
+    /** The layer to render and save. */
     var current: AnnotationLayer = initial
         private set
 
-    /** Records [next] as the new current layer, with [current] becoming the one step [undo] would return to. Clears the redo stack, per standard undo/redo semantics: a new edit invalidates any previously-undone future. */
+    /** Makes [next] current, pushing the old current onto the undo stack. Clears the redo stack. */
     fun push(next: AnnotationLayer) {
         undoStack.addLast(current)
         if (undoStack.size > maxDepth) undoStack.removeFirst()
@@ -36,7 +27,7 @@ class AnnotationHistory(
         current = next
     }
 
-    /** Reverts to the layer before the most recent [push], if any. Returns whether it actually did anything. */
+    /** Reverts the most recent [push], if any; returns whether it did. */
     fun undo(): Boolean {
         val previous = undoStack.removeLastOrNull() ?: return false
         redoStack.addLast(current)
@@ -44,7 +35,7 @@ class AnnotationHistory(
         return true
     }
 
-    /** Re-applies the most recently undone [push], if any. Returns whether it actually did anything. */
+    /** Re-applies the most recently undone [push], if any; returns whether it did. */
     fun redo(): Boolean {
         val next = redoStack.removeLastOrNull() ?: return false
         undoStack.addLast(current)

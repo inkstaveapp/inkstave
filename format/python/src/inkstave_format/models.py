@@ -1,21 +1,11 @@
 """Typed models for the .smpk format's JSON documents (format version 1).
 
-Every model sets ``extra="allow"``: docs/format-spec.md requires that JSON
-object keys this codebase doesn't model yet survive a read-modify-write
-round trip ("Unknown fields are always preserved... never dropped"), so
-that e.g. a future OMR integration can attach data older clients don't
-understand without those clients silently deleting it when they save.
-Pydantic's ``extra="allow"`` captures and re-emits unrecognised keys
-automatically, which is why these models don't need the hand-rolled
-unknown-field bookkeeping the Kotlin side
-(``client/shared/.../format/Manifest.kt``) implements manually --
-Pydantic v2 gives this to us for free.
+Every model sets ``extra="allow"``: the spec requires unknown keys to
+survive a read-modify-write round trip, so data from newer clients (e.g. OMR
+results) isn't deleted by older ones.
 
-Every JSON document in this format uses camelCase keys (matching the
-Kotlin side, which serializes data classes as-is). Python field names stay
-snake_case per PEP 8, with a camelCase alias generated automatically --
-use ``.model_dump(by_alias=True)`` (or ``inkstave_format.io.dump_json``)
-when writing a model back out, or the camelCase keys won't come back.
+JSON keys are camelCase; Python fields are snake_case with generated
+aliases, so write with ``by_alias=True`` (or ``io.dump_json``).
 """
 
 from __future__ import annotations
@@ -35,11 +25,8 @@ class _InkstaveModel(BaseModel):
 
 
 class ManifestSource(_InkstaveModel):
-    """``manifest.json``'s ``source`` object.
-
-    ``details`` is deliberately untyped: its shape depends on ``type`` and
-    the format spec describes it only as "type-specific, e.g. original
-    filename" without enumerating every field yet.
+    """``manifest.json``'s ``source`` object. ``details`` is untyped because its
+    shape depends on ``type`` and the spec doesn't define it yet.
     """
 
     type: str
@@ -47,11 +34,7 @@ class ManifestSource(_InkstaveModel):
 
 
 class Manifest(_InkstaveModel):
-    """The v1 ``manifest.json`` contained in a `.smpk` score package.
-
-    See ``docs/format-spec.md``, the "``manifest.json``" section, for the
-    authoritative field-by-field description.
-    """
+    """The v1 ``manifest.json`` of a `.smpk` package (see ``docs/format-spec.md``)."""
 
     format_version: int
     id: str

@@ -26,22 +26,16 @@ data class AnnoBounds(
         y: Double,
     ): Boolean = x in minX..maxX && y in minY..maxY
 
-    /** Expands these bounds by [margin] on every side -- used to give small/zero-area items (a stroke point, a tap) a hit-testable extent. */
+    /** Expands these bounds by [margin] on every side, giving small or zero-area items a hit-testable extent. */
     fun expanded(margin: Double): AnnoBounds = AnnoBounds(minX - margin, minY - margin, maxX + margin, maxY + margin)
 }
 
 /**
- * One annotation object, wrapped with the [AnnoBounds] [AnnotationSpatialIndex]
- * needs -- kept separate from the four `format.*` data classes themselves
- * (rather than having e.g. `Stamp` implement an interface) so the format
- * models stay plain data with no rendering/indexing concerns baked in.
+ * One annotation object plus the [AnnoBounds] [AnnotationSpatialIndex] needs. A wrapper, so the
+ * `format.*` models stay plain data.
  *
- * Z-order (bottom to top, for both drawing and [AnnotationSpatialIndex.hitTest]'s
- * "topmost wins" tie-break) is [AnnotationLayer]'s own field order:
- * highlights first (background washes), then strokes, then stamps, then
- * text notes last -- a defensible authoring convention (text should be the
- * easiest thing to grab back out) documented here since the format itself
- * doesn't mandate a z-order.
+ * Z-order, bottom to top (for drawing and for hit-testing's "topmost wins"): highlights, strokes,
+ * stamps, text notes. The format doesn't mandate one; text goes last so it's easiest to grab.
  */
 sealed interface AnnotationItem {
     val id: String
@@ -77,13 +71,8 @@ sealed interface AnnotationItem {
     ) : AnnotationItem {
         override val id get() = stamp.id
 
-        // Stamps are drawn at a fixed base half-extent (see AnnotationOverlay's
-        // STAMP_BASE_HALF_EXTENT_PT, which this must stay consistent with),
-        // scaled by `stamp.scale`. Rotation isn't accounted for in the bounds
-        // (a tight rotated-rect bound), which makes bounds a conservative
-        // over-estimate for a rotated stamp -- correct for culling (draws a
-        // superset of what's needed, never misses anything) and for hit-testing
-        // (slightly generous hit area, an acceptable UX trade for M2's simplicity).
+        // Must match the size AnnotationOverlay draws stamps at. Rotation is ignored, so bounds
+        // over-estimate a rotated stamp: safe for culling, slightly generous for hit-testing.
         override val bounds: AnnoBounds
             get() {
                 val halfExtent = STAMP_BASE_HALF_EXTENT_PT * stamp.scale
@@ -100,12 +89,8 @@ sealed interface AnnotationItem {
     ) : AnnotationItem {
         override val id get() = textNote.id
 
-        // Text width isn't known without measuring the actual glyphs (a UI-layer
-        // concern), so this approximates using a fixed characters-per-fontSizePt
-        // ratio -- generous enough that real hit-testing/culling won't clip a
-        // typical short annotation's actual rendered extent. Long text notes may
-        // have a slightly tight bound; acceptable for M2, revisit if it's a real
-        // problem once real usage shows it.
+        // Approximated from a fixed character width, since measuring glyphs is a UI concern.
+        // Generous for short notes; long notes may get a slightly tight bound.
         override val bounds: AnnoBounds
             get() {
                 val approxCharWidth = textNote.fontSizePt * 0.6
@@ -125,7 +110,7 @@ sealed interface AnnotationItem {
     }
 }
 
-/** A plain 4-tuple, local to this file -- avoids pulling in a Pair-of-Pairs or a fifth data class just to destructure `rectPt`. */
+/** A plain 4-tuple for destructuring `rectPt`. */
 private data class Quad(
     val a: Double,
     val b: Double,

@@ -6,26 +6,16 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * The wire framing every sync message (the pairing identity exchange, `PairingSession`; the
- * capture-session transfer, `CaptureSessionMessage`) uses over a TLS socket's raw streams: a
- * 4-byte big-endian length prefix (the payload's byte count, not including this header),
- * followed by exactly that many payload bytes. Deliberately this simple -- no message-type byte
- * at *this* layer (each protocol built on top of it defines its own payload shape inside the
- * length-prefixed body; `CaptureSessionMessage.encode`/`decode` is where a type byte actually
- * lives), no compression, no chunking: TLS already provides integrity/confidentiality, and a
- * capture-session photo is a single phone photo (single-digit megabytes at most), not large
- * enough to need a streamed/chunked transfer within one frame.
+ * Framing for every sync message over TLS: a 4-byte big-endian payload length, then the payload.
+ * Message types live in the payload; no compression or chunking, since TLS already provides integrity
+ * and a photo fits comfortably in one frame.
  */
 object MessageFraming {
-    /**
-     * A sanity ceiling on a frame's declared length, generously above any real payload this
-     * protocol ever sends -- guards [readFrame] against allocating gigabytes of memory for a
-     * corrupt or hostile length prefix, not a real expected-size limit.
-     */
+    /** Upper bound on a declared frame length, so a corrupt or hostile prefix can't make [readFrame]
+     * allocate gigabytes. */
     private const val MAX_FRAME_BYTES = 64 * 1024 * 1024
 
-    /** Writes [payload] to [output] as one length-prefixed frame, flushing afterward so the peer's blocking
-     * [readFrame] call actually receives it promptly rather than sitting in a buffer. */
+    /** Writes [payload] as one frame and flushes, so the peer's blocking [readFrame] gets it promptly. */
     fun writeFrame(
         output: OutputStream,
         payload: ByteArray,

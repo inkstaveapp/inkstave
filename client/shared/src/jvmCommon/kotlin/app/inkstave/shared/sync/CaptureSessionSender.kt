@@ -6,52 +6,35 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
-/**
- * Outcome of one [CaptureSessionSender.send] attempt -- a sealed result rather than exceptions
- * alone, matching [PairingOutcome]'s shape, since "the peer isn't currently reachable" is a real,
- * expected, UI-relevant outcome (the paired desktop's app might just not be running right now),
- * not something to report the same way as a genuine transfer failure.
- */
+/** Outcome of one [CaptureSessionSender.send]; "peer not running" is an expected result, not an exception. */
 sealed interface CaptureSessionSendOutcome {
     /** Every photo was sent and the connection closed normally. */
     data object Sent : CaptureSessionSendOutcome
 
-    /** [peer] is a paired, trusted device, but nothing advertising its [TrustedPeer.deviceId] was found on the
-     * local network within the discovery timeout -- most commonly because the peer's app isn't currently
-     * running, or it's on a different network right now. Not a pairing/trust failure: the peer is still
-     * trusted, it just couldn't be located to connect to. */
+    /** [peer] wasn't found on the local network in time (app not running, or another network). The peer
+     * is still trusted; this is not a pairing failure. */
     data class PeerNotFound(
         val peer: TrustedPeer,
     ) : CaptureSessionSendOutcome
 
-    /** The peer was found, but connecting or sending failed (e.g. the certificate it's currently presenting no
-     * longer matches the pinned fingerprint -- see [LanSyncTransport.connect] -- or the connection dropped
-     * mid-transfer). */
+    /** The peer was found but connecting or sending failed, e.g. its certificate no longer matches the
+     * pinned fingerprint or the connection dropped. */
     data class Failed(
         val reason: String,
     ) : CaptureSessionSendOutcome
 }
 
 /**
- * Sends one capture session (`docs/sync-protocol.md`'s "Capture session") to an already-paired
- * [TrustedPeer]: pairing only ever pinned that peer's certificate fingerprint, never a live
- * address (a device's IP changes, e.g. via DHCP), so every real send first finds where the peer
- * currently is via [discovery] -- the same reason [LanSyncTransport.connect] re-checks the
- * fingerprint at connect time rather than trusting a stale cached address, just one layer up.
- *
- * This class only composes [SyncDiscovery]/[SyncTransport]/[CaptureSessionMessage] -- it
- * introduces no new networking or cryptographic primitive of its own.
+ * Sends one capture session to a paired [TrustedPeer]. Pairing pins a certificate, not an address
+ * (addresses change), so every send first locates the peer via [discovery].
  */
 class CaptureSessionSender(
     private val discovery: SyncDiscovery,
     private val transport: SyncTransport,
 ) {
     /**
-     * Finds [peer] on the local network (up to [discoveryTimeoutMillis]) and, if found, sends
-     * [photos] as one session: [CaptureSessionMessage.SessionStart], then one
-     * [CaptureSessionMessage.Photo] per photo in [photos]' given order (that order becomes the
-     * score's page order on the receiving side, the same M1 constraint local image import already
-     * has -- see [CaptureSessionReceiver]), then [CaptureSessionMessage.SessionEnd].
+     * Finds [peer] (within [discoveryTimeoutMillis]) and sends [photos] as one session. The order of
+     * [photos] becomes the page order of the received score.
      */
     fun send(
         peer: TrustedPeer,
@@ -74,12 +57,8 @@ class CaptureSessionSender(
     }
 
     /**
-     * Browses [discovery] until a device advertising [deviceId] appears, or [timeoutMillis] elapses -- a
-     * short-lived listener scoped to this one lookup, unlike [PairingScreen]'s standing browse for as long as
-     * that screen is on-screen: sending a capture session is a one-shot action, not a UI state to keep live.
-     * [SyncDiscovery] has no "stop browsing" call of its own; this class doesn't own [discovery]'s lifecycle
-     * (the caller does, typically closing it right after this call returns, the same short-lived-instance
-     * pattern [MainActivity]'s per-send wiring uses).
+     * Browses until a device advertising [deviceId] appears or [timeoutMillis] elapses. [SyncDiscovery]
+     * can't stop browsing, so the caller owns [discovery] and closes it afterwards.
      */
     private fun discoverDeviceById(
         deviceId: String,

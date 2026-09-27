@@ -15,15 +15,9 @@ import java.time.Duration
 import java.util.Base64
 
 /**
- * One page's result from `processing-service`'s `POST /process-page`
- * (`docs/image-pipeline.md`'s "Service interface (sketch)",
- * `processing-service/README.md`'s "The HTTP API"). Mirrors
- * `inkstave_processing.models.ProcessPageResponse` field-for-field, including its camelCase
- * convention (kotlinx.serialization's default property-name-as-JSON-key behaviour already matches
- * it here, the same as `PageProcessing`/`PageOcr` -- no `@SerialName` needed) -- this is a wire
- * -contract model, distinct from `app.inkstave.shared.importer.ProcessedPage` (which is what a
- * caller actually wants to write into a `.smpk`; [cleanedImageBase64] there gets decoded into raw
- * PNG bytes).
+ * Wire model for one `POST /process-page` result; mirrors
+ * `inkstave_processing.models.ProcessPageResponse` field for field (camelCase keys). Callers convert
+ * it to `app.inkstave.shared.importer.ProcessedPage` before writing a `.smpk`.
  */
 @Serializable
 data class ProcessPageResponseBody(
@@ -39,28 +33,18 @@ data class ProcessPageResponseBody(
 }
 
 /**
- * Thrown for any `/process-page` call that didn't succeed -- a non-2xx response (most notably 422,
- * "no page could be detected in this photo," per `docs/image-pipeline.md`), a connection failure,
- * or a response `processing-service`'s own contract doesn't actually match. Callers
- * ([app.inkstave.shared.sync.CaptureSessionReceiver]) catch this to fall back to raw,
- * unprocessed import rather than failing a whole capture session over one bad photo or an
- * unreachable service -- see that class's own doc for the fallback policy.
+ * Any failed `/process-page` call: a non-2xx response (422 means no page was detected in the
+ * photo), a connection failure, or an unparseable response. Callers fall back to importing the raw
+ * photo rather than failing the whole capture session.
  */
 class ProcessingServiceException(
     message: String,
 ) : IOException(message)
 
 /**
- * Desktop-only HTTP client for `processing-service` (`docs/architecture.md`: "It is not expected
- * to run on Android; the desktop client is its only caller"). Built on the JDK's own
- * `java.net.http.HttpClient` (available since Java 11) deliberately -- this is the one new
- * outbound integration point this pass adds, and it talks to a service already running on the
- * same machine over loopback, which doesn't warrant a new HTTP-client dependency on top of what
- * the JDK already ships.
- *
- * [baseUri] defaults to `processing-service/README.md`'s documented `127.0.0.1:8787` -- the
- * service is loopback-only by design (`docs/image-pipeline.md`), so there is no legitimate reason
- * for this to ever point anywhere else in v1.
+ * Desktop-only HTTP client for the local `processing-service`, using the JDK's own
+ * `java.net.http.HttpClient` (a loopback call doesn't justify an HTTP library). The service is
+ * loopback-only by design, hence the fixed default [baseUri].
  */
 class ProcessingServiceClient(
     private val baseUri: URI = URI.create("http://127.0.0.1:8787"),
@@ -68,28 +52,13 @@ class ProcessingServiceClient(
     private val httpClient =
         HttpClient
             .newBuilder()
-            // HTTP_1_1, not the JDK's default HTTP_2-preferred negotiation: this client only ever
-            // talks to one specific plain-HTTP/1.1 uvicorn server (never anything HTTP/2-capable),
-            // and defaulting to HTTP/2 preference sends an `Upgrade: h2c` cleartext-upgrade attempt
-            // on every new connection that uvicorn's H11 implementation logs as "Unsupported
-            // upgrade request" and does not handle cleanly alongside a request body -- a real bug
-            // this project's own integration tests against the real service caught directly (a
-            // POST /process-page body silently arriving empty server-side, not a hypothetical).
-            // Pinning HTTP/1.1 here is the fix, not a workaround for something wrong on the server
-            // side: there's no reason for a loopback call to a single-process dev service to
-            // attempt HTTP/2 negotiation in the first place.
+            // HTTP/1.1 only: the JDK's default sends an `Upgrade: h2c` request that uvicorn
+            // doesn't handle alongside a request body, so POST bodies arrived empty.
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofMillis(HEALTH_CHECK_TIMEOUT_MILLIS))
             .build()
 
-    /**
-     * `true` iff `GET /health` responds successfully within a short timeout -- the fast, cheap
-     * check [ProcessingServiceLauncher] tries first (the service might already be running, e.g.
-     * started manually for development) and [app.inkstave.shared.sync.CaptureSessionReceiver]
-     * uses per received session to decide whether to even attempt processing. Never throws --
-     * any failure (connection refused, timeout, a non-200 response) is exactly the "not healthy"
-     * case, not something worth distinguishing here.
-     */
+    /** `true` iff `GET /health` answers 200 within a short timeout. Never throws; any failure means "not healthy". */
     fun isHealthy(): Boolean =
         try {
             val request =
@@ -107,16 +76,11 @@ class ProcessingServiceClient(
         }
 
     /**
-     * Runs the real cleanup/OCR pipeline on [imageBytes] via `POST /process-page`
-     * (`processing-service/README.md`'s exact query-parameter/body shape: raw bytes as the body,
-     * not JSON/multipart-wrapped -- see that endpoint's own doc for why). [sessionId]/
-     * [sequenceIndex] are threaded through per the documented contract (not consumed by the
-     * pipeline itself yet, per that endpoint's own doc), so a future slice examining server-side
-     * logs/metrics per session has them without this call site needing to change.
+     * Runs the cleanup/OCR pipeline on [imageBytes] via `POST /process-page`, sending the raw bytes
+     * as the body. [sessionId] and [sequenceIndex] are part of the API contract but not yet used by
+     * the service.
      *
-     * @throws ProcessingServiceException on any failure -- a 422 (no page detected), a connection
-     * problem, or a response this client's own model doesn't parse as valid JSON. Callers decide
-     * the fallback policy (see that exception's own doc); this method doesn't try to guess one.
+     * @throws ProcessingServiceException on any failure; the caller decides the fallback.
      */
     fun processPage(
         imageBytes: ByteArray,

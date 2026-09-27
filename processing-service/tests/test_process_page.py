@@ -1,7 +1,4 @@
-"""Integration test for `POST /process-page`, per `docs/testing-strategy.md`'s "Desktop client
-<-> processing-service" requirement: real HTTP calls through `TestClient` against the real
-pipeline (`inkstave_processing.pipeline.run.process_page`), not a mocked one -- the same spirit
-as `test_health.py`'s existing test."""
+"""Integration tests for `POST /process-page` through the real app and pipeline."""
 
 from __future__ import annotations
 
@@ -35,8 +32,7 @@ def test_process_page_returns_cleaned_image_and_metadata() -> None:
     assert response.status_code == 200
     body = response.json()
 
-    # camelCase throughout, top level included -- ProcessPageResponse's own doc explains why
-    # (consistency with inkstave_format's established JSON convention, docs/format-spec.md).
+    # Keys are camelCase at every level.
     cleaned_bytes = base64.b64decode(body["cleanedImageBase64"])
     decoded = cv2.imdecode(np.frombuffer(cleaned_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
     assert decoded is not None  # the response really is a valid, decodable PNG
@@ -47,9 +43,7 @@ def test_process_page_returns_cleaned_image_and_metadata() -> None:
     assert len(body["processing"]["cropPolygon"]) == 4
     assert body["processing"]["dewarpMeshVersion"]
     assert body["processing"]["contrastMethod"]
-    # This synthetic fixture has no real text on it (see fixtures.py's module doc) -- an
-    # empty-but-present OCR result is the correct outcome here, not a failure. test_ocr.py covers
-    # the classification heuristic itself against realistic title-page fixtures.
+    # The fixture has no text, so an empty OCR result is correct.
     assert body["ocr"]["engineVersion"]
     assert isinstance(body["ocr"]["candidates"], dict)
 

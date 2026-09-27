@@ -9,14 +9,8 @@ import java.io.File
 import kotlin.math.roundToInt
 
 /**
- * Android implementation of [renderPdfPages] using the platform's built-in
- * `android.graphics.pdf.PdfRenderer` (API 21+, well under this project's
- * minSdk 26) -- no third-party PDF library needed on this target (see
- * `NOTICE.md` and `PlatformImport.desktop.kt`'s PDFBox comment for why
- * desktop needs one and Android doesn't).
- *
- * [PdfRenderer] only opens a [ParcelFileDescriptor], not raw bytes, so
- * [pdfBytes] is first spooled to a private cache file.
+ * Android [renderPdfPages] using the platform's built-in [PdfRenderer], so no PDF library is
+ * needed here. [PdfRenderer] only opens a [ParcelFileDescriptor], so [pdfBytes] go through a temp file.
  */
 actual fun renderPdfPages(pdfBytes: ByteArray): List<DecodedPage> {
     require(pdfBytes.isNotEmpty()) { "pdfBytes must not be empty" }
@@ -54,10 +48,7 @@ private fun PdfRenderer.renderPage(index: Int): DecodedPage {
     }
 }
 
-/**
- * Android implementation of [decodeImagePage] using [BitmapFactory], which
- * covers PNG/JPEG/WebP/etc. without any extra dependency.
- */
+/** Android [decodeImagePage] using [BitmapFactory] (PNG, JPEG, WebP, ...). */
 actual fun decodeImagePage(imageBytes: ByteArray): DecodedPage {
     val bitmap =
         BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)

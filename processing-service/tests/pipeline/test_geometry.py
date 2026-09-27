@@ -48,10 +48,8 @@ def test_geometric_correct_on_a_flat_photo_recovers_roughly_original_proportions
 
 
 def _column_straightness_std(gray: ImageU8, expected_col: int, window: int = 25) -> float:
-    """How much the darkest-pixel column wanders across rows, near `expected_col` -- a small value
-    means the content there forms a straight vertical line; a large value means it's curved. Only
-    looks at rows with at least one sufficiently dark pixel in the window, so background-only rows
-    (outside the drawn line's vertical extent) don't count as noise."""
+    """Standard deviation of the dark pixels' column near `expected_col` across
+    rows: small for a straight vertical line. Rows without dark pixels are ignored."""
     width = gray.shape[1]
     left = max(0, expected_col - window)
     right = min(width, expected_col + window)
@@ -63,15 +61,12 @@ def _column_straightness_std(gray: ImageU8, expected_col: int, window: int = 25)
         if len(dark_cols) > 0:
             col_positions.append(float(np.mean(dark_cols)))
     if len(col_positions) < 10:
-        return float("inf")  # not enough signal to judge -- maximally bad, not a false pass
+        return float("inf")  # too little signal: fail rather than pass
     return float(np.std(col_positions))
 
 
 def test_geometric_correct_straightens_a_horizontally_bowed_page() -> None:
-    # apply_horizontal_bow shifts each *row* sideways by an amount depending on its y-position --
-    # a horizontal rule line (constant y) shifts as a whole and stays straight, but a vertical
-    # barline (constant x) is exactly the kind of content that warp visibly bends into a curve
-    # (see that function's doc). Test the barlines, not the rule lines, for that reason.
+    # The bow shifts whole rows, so horizontal lines stay straight; barlines are what bend.
     page = make_flat_page(width=600, height=800)
     photo, _ = compose_photo(page)
     bowed_photo = apply_horizontal_bow(photo, amplitude_px=40.0)
@@ -83,10 +78,7 @@ def test_geometric_correct_straightens_a_horizontally_bowed_page() -> None:
     corrected_gray = np.mean(corrected.image, axis=2).astype(np.uint8)
     bowed_gray = np.mean(bowed_photo, axis=2).astype(np.uint8)
 
-    # Compare straightness of the same barline, before vs after correction. The "before" value is
-    # measured directly on the bowed photo at the same expected column (+150: compose_photo's
-    # default horizontal canvas offset); "after" is scaled by how geometric_correct's output width
-    # compares to the original page width (verified close by the proportions test above).
+    # +150 is compose_photo's horizontal offset; the corrected column is scaled by output width.
     scale = corrected.image.shape[1] / 600
     for expected_col in BARLINE_COLUMNS:
         before = _column_straightness_std(bowed_gray, expected_col + 150)

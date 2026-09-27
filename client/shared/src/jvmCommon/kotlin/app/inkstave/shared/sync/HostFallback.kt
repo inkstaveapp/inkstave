@@ -7,14 +7,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 /**
- * Calls [connect] with each of [hosts] in order and returns the first result, moving on to the
- * next address only when the current one is *unreachable* (refused, no route, timed out, or
- * unresolvable). Any other failure -- a TLS handshake rejection, a fingerprint mismatch -- is
- * rethrown immediately: that means the device *was* reached and said no, and retrying the same
- * device on another of its addresses would only repeat the same answer.
- *
- * Exists because a device can advertise several addresses (one per network interface, see
- * `JmDnsSyncDiscovery`), and not every one is necessarily reachable from where the caller is.
+ * Tries [connect] on each of [hosts] in order, moving on only when an address is unreachable (refused,
+ * no route, timeout, unresolvable). Any other failure, such as a TLS rejection, is rethrown at once:
+ * the device was reached and said no, and its other addresses would say the same.
  */
 internal inline fun <T> firstReachable(
     hosts: List<String>,

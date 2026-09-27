@@ -63,49 +63,16 @@ import java.io.File
 import java.util.UUID
 
 /**
- * The score viewer (`ROADMAP.md` M1: "Render pages, swipe/tap/keyboard page
- * turning"; M2: annotation editing; M3: pedal input + performance mode).
- * Opens the `.smpk` at [filePath], shows its (single, M1) part's pages
- * full-screen one at a time, and supports turning pages in
- * [AnnotationMode.VIEW] via swiping ([HorizontalPager]'s own gesture
- * handling), tapping the left/right thirds of the screen, or any key
- * [pedalMapping] binds to [PedalAction.NEXT_PAGE]/[PedalAction.PREVIOUS_PAGE]
- * -- which covers both a desktop arrow-key press (delivered straight to
- * this composable's own [onPreviewKeyEvent], the standard Compose Desktop
- * mechanism) and an Android pedal press (delivered indirectly: see
- * [onRawKeyHandlerChange]'s doc for why Android needs a different delivery
- * path than desktop does, even though both end up calling the exact same
- * [handlePedalAction] once the key event arrives).
+ * Opens the `.smpk` at [filePath] and shows its pages full-screen, one at a time. In [AnnotationMode.VIEW] pages
+ * turn by swiping, tapping the left/right thirds, or any key [pedalMapping] binds to [PedalAction.NEXT_PAGE] or
+ * [PedalAction.PREVIOUS_PAGE]. Only the current page and its neighbours are loaded (`docs/performance.md`).
  *
- * Pages are decoded lazily: only the current page and its immediate
- * neighbours are ever loaded into memory at once, per
- * `docs/format-spec.md`'s per-page-file design and the "load only what's on
- * screen" principle `docs/performance.md` applies to annotations and, here,
- * to page bitmaps too. Page metadata and annotation layers are loaded on
- * the same lazy, per-page-in-view schedule.
- *
- * @param pedalMapping which key triggers which [PedalAction] -- see
- *   `PedalKeyMapping.DEFAULT`'s doc for what it covers out of the box, and
- *   `PedalSettingsScreen` for how a user changes it. Desktop consumes this
- *   directly (this composable's own key handling); Android consumes it via
- *   [onRawKeyHandlerChange].
- * @param onRawKeyHandlerChange Android-only bridge (a no-op default, since
- *   desktop doesn't need it), shared with `PedalSettingsScreen`'s own
- *   "press the key you want to use" capture flow -- both register into the
- *   same mechanism, one raw `Key` at a time, because both have the exact
- *   same underlying problem: hardware key events on Android are dispatched
- *   to `Activity.dispatchKeyEvent`, *outside* the Compose tree entirely,
- *   before Compose's own focus-based key dispatch even runs. Relying on
- *   this composable's [onPreviewKeyEvent] alone would make pedal handling
- *   on Android fragile in a way that's hard to verify without physical
- *   hardware (whether this composable's focus request actually "sticks"
- *   against Android's touch-mode focus suppression after the touch-driven
- *   page-turning gestures this same screen offers). Registering a plain
- *   `(Key) -> Boolean` callback here, for `MainActivity` to call from
- *   `dispatchKeyEvent`, sidesteps that uncertainty entirely by not
- *   depending on Compose focus for key handling on Android at all. This
- *   composable's own registration wraps [pedalMapping]'s lookup around
- *   [handlePedalAction]; registered on mount, cleared (`null`) on dispose.
+ * @param pedalMapping which key triggers which [PedalAction]. Desktop uses it in this composable's own key
+ *   handling; Android via [onRawKeyHandlerChange].
+ * @param onRawKeyHandlerChange Android-only bridge, also used by `PedalSettingsScreen`. Android delivers
+ *   hardware keys to `Activity.dispatchKeyEvent` before Compose sees them, and Compose focus is unreliable after
+ *   touch gestures, so this screen registers a `(Key) -> Boolean` handler for `MainActivity` to call instead
+ *   of depending on focus. Registered on mount, cleared (`null`) on dispose; desktop's default is a no-op.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,12 +94,8 @@ fun ViewerScreen(
     val pagerState = rememberPagerState(pageCount = { pageIds.size })
     val bitmaps = remember { mutableStateMapOf<Int, ImageBitmap>() }
     val pageMetas = remember { mutableStateMapOf<Int, PageMeta>() }
-    // The observable "what to render" layer per page index -- Compose recomposes on
-    // writes to this map. AnnotationHistory instances (below) are plain, unobserved
-    // bookkeeping for undo/redo; every operation that changes a page's layer writes
-    // the result here too, which is what actually drives recomposition. See
-    // ViewerScreen's module doc and AnnotationOverlay's for why the two are kept
-    // separate rather than reading straight from AnnotationHistory.current.
+    // The rendered layer per page; writes here trigger recomposition. AnnotationHistory (below) is
+    // unobserved undo/redo bookkeeping, so every layer change is written to both.
     val currentLayers = remember { mutableStateMapOf<Int, AnnotationLayer>() }
     val histories = remember { mutableMapOf<Int, AnnotationHistory>() }
     val saveJobs = remember { mutableMapOf<Int, Job>() }
@@ -143,16 +106,10 @@ fun ViewerScreen(
     var stampSymbol by remember { mutableStateOf(STAMP_PALETTE.first()) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var textDialogRequest by remember { mutableStateOf<TextDialogRequest?>(null) }
-    // Performance mode (ROADMAP.md M3): minimal chrome + keep-awake (Android only,
-    // KeepScreenOnEffect below) for on-stage use. Page turning (swipe/tap-zone/pedal)
-    // stays fully live in performance mode -- only the toolbar/back-button/page
-    // -indicator chrome hides; hiding the thing a performer needs mid-performance would
-    // defeat the entire point of the feature.
+    // Performance mode: minimal chrome and keep-awake for on-stage use. Page turning stays fully live;
+    // only the toolbar, back button and page indicator hide.
     var performanceModeEnabled by remember { mutableStateOf(false) }
-    // HorizontalPager's pageSpacing, made negative, is what produces the "half-page
-    // /overlap" transition ROADMAP.md M3 asks for -- a real Compose Foundation
-    // parameter already built for exactly this kind of visual effect, not a custom
-    // animation. See OVERLAP_PAGE_SPACING's own doc for the specific value.
+    // A negative pageSpacing gives the overlapping page-turn transition (see OVERLAP_PAGE_SPACING).
     var overlapTurnEnabled by remember { mutableStateOf(false) }
 
     LaunchedEffect(reader, pagerState.currentPage) {
@@ -176,7 +133,7 @@ fun ViewerScreen(
         }
     }
 
-    /** Records [newLayer] as [pageIndex]'s new current layer (both in undo history and for rendering) and schedules a debounced save -- see [SmpkUpdater]'s "one rewrite per logical edit, not per pointer-move" note. */
+    /** Records [newLayer] as [pageIndex]'s current layer (undo history and rendering) and schedules a debounced save. */
     fun applyLayer(
         pageIndex: Int,
         newLayer: AnnotationLayer,
@@ -209,12 +166,9 @@ fun ViewerScreen(
     }
 
     /**
-     * What a pedal press (or its desktop-arrow-key/space/page-up-down equivalent)
-     * actually does -- the one place both delivery paths ([onPreviewKeyEvent] below,
-     * for desktop, and [onRawKeyHandlerChange], for Android) end up calling, so
-     * the two platforms can never drift into handling the same [PedalAction]
-     * differently. `goTo` already clamps to the score's page range, so calling this
-     * on the first/last page is a safe no-op, not a bug to guard against here too.
+     * What a pedal press (or equivalent key) does: the single handler both key paths call ([onPreviewKeyEvent] on
+     * desktop, [onRawKeyHandlerChange] on Android), so the platforms can't drift apart. `goTo` clamps, so turning
+     * past the first or last page is a safe no-op.
      */
     fun handlePedalAction(action: PedalAction): Boolean {
         when (action) {
@@ -224,11 +178,8 @@ fun ViewerScreen(
         return true
     }
 
-    // Android's half of the key-dispatch bridge (see onRawKeyHandlerChange's param
-    // doc): publish a handler that maps a raw Key through pedalMapping while this
-    // screen is on-screen, and withdraw it on dispose so a key press after leaving
-    // the viewer doesn't call a stale handler closing over a reader that's already
-    // been closed.
+    // Android's key bridge: registered while on-screen and withdrawn on dispose, so a later key press
+    // can't reach a handler holding an already-closed reader.
     DisposableEffect(onRawKeyHandlerChange, pedalMapping) {
         onRawKeyHandlerChange { key -> pedalMapping.actionFor(key)?.let { action -> handlePedalAction(action) } ?: false }
         onDispose { onRawKeyHandlerChange(null) }
@@ -244,11 +195,8 @@ fun ViewerScreen(
                 .focusRequester(focusRequester)
                 .focusable()
                 .onPreviewKeyEvent { event ->
-                    // Desktop's delivery path for PedalAction: this composable has
-                    // focus (focusRequester above) and Compose Desktop has no
-                    // touch-mode concept to fight, unlike Android -- see
-                    // onRawKeyHandlerChange's doc for why Android needs a
-                    // different path to the same handlePedalAction.
+                    // Desktop's key path: this composable holds focus, and desktop has no touch-mode
+                    // focus loss to work around.
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
                         Key.Back, Key.Escape -> {
@@ -262,13 +210,11 @@ fun ViewerScreen(
                     }
                 },
     ) {
-        // Android-only (see PerformanceMode.kt); a documented no-op on desktop.
+        // No-op on desktop (see PerformanceMode.kt).
         KeepScreenOnEffect(enabled = performanceModeEnabled)
 
         Box(modifier = Modifier.fillMaxSize()) {
-            // Page turning gestures only in VIEW mode -- see AnnotationOverlay's module
-            // doc for why editing modes disable them instead of trying to disambiguate
-            // a draw gesture from a swipe.
+            // Page-turn gestures only in VIEW mode, so editing gestures are never mistaken for swipes.
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = mode == AnnotationMode.VIEW,
@@ -327,9 +273,7 @@ fun ViewerScreen(
                 }
             }
 
-            // Tap zones: left/right thirds turn the page (VIEW mode only -- in an
-            // editing mode this same screen region is for annotating, per
-            // AnnotationOverlay's module doc), alongside HorizontalPager's own swipe.
+            // Tap zones: the left/right thirds turn the page, in VIEW mode only.
             if (mode == AnnotationMode.VIEW) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     TapZone(weight = 1f, onTap = { goTo(pagerState.currentPage - 1) }, testTag = TestTags.VIEWER_TAP_ZONE_PREVIOUS)
@@ -338,9 +282,7 @@ fun ViewerScreen(
                 }
             }
 
-            // Performance mode (ROADMAP.md M3) hides everything below except page
-            // content and the tap zones/pedal handling above -- but never this toggle
-            // itself, which stays visible so there's always a way back out of it.
+            // Performance mode hides everything below except this toggle, so there's always a way back out.
             if (!performanceModeEnabled) {
                 BackButton(onBack = onBack, modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
 
@@ -392,11 +334,7 @@ fun ViewerScreen(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
                 )
 
-                // "Page X of Y": a small, genuinely useful M1-scale affordance (most
-                // viewers show one) that also doubles as the one reliable signal a UI
-                // test can assert on to prove a tap/swipe/key actually changed the
-                // displayed page -- HorizontalPager's own internals aren't otherwise
-                // observable from outside the composable.
+                // "Page X of Y"; also the signal UI tests assert on, since the pager's state isn't observable.
                 Text(
                     "${pagerState.currentPage + 1} / ${pageIds.size}",
                     modifier =
@@ -412,9 +350,7 @@ fun ViewerScreen(
                 enabled = performanceModeEnabled,
                 onEnabledChange = { enabled ->
                     performanceModeEnabled = enabled
-                    // Entering performance mode always returns to plain viewing -- the
-                    // mode-switching UI that would let a performer accidentally start
-                    // drawing mid-piece is exactly what this mode just hid.
+                    // Entering performance mode returns to plain viewing, so a performer can't start drawing by accident.
                     if (enabled) {
                         mode = AnnotationMode.VIEW
                         selectedId = null
@@ -465,19 +401,15 @@ fun ViewerScreen(
     }
 }
 
-/** How long to wait, after the most recent annotation edit, before actually rewriting the `.smpk` (`SmpkUpdater`'s "one rewrite per logical edit" cost note) -- long enough to coalesce a burst of edits (e.g. several quick taps placing stamps) into one save, short enough that closing the app moments later is very unlikely to race a still-pending save. Not user-configurable; a reasonable fixed default for M2. */
+/**
+ * Delay after the last annotation edit before rewriting the `.smpk`: long enough to merge a burst of edits into
+ * one save, short enough that closing the app soon after is unlikely to race a pending save.
+ */
 private const val SAVE_DEBOUNCE_MILLIS = 600L
 
 /**
- * `HorizontalPager`'s `pageSpacing`, made negative, is Compose Foundation's own
- * documented way to make adjacent pages overlap during the swipe transition
- * (`ROADMAP.md` M3's "optional half-page/overlap turn behavior") -- a real
- * layout parameter, not a custom transition. 48dp is a visible-but-not
- * -excessive overlap at typical phone/tablet/desktop-window widths; not tuned
- * against real usage (there isn't any yet). There's a known, not-fully
- * -triaged upstream Compose issue around negative `pageSpacing` edge cases
- * (issuetracker.google.com/issues/395489594) -- worth a visual check once
- * this can be verified on a real device/window, not just from a passing test.
+ * Negative `pageSpacing` so adjacent pages overlap during the swipe transition. Negative spacing has a known
+ * upstream edge-case issue (issuetracker.google.com/issues/395489594); check it visually when changing this.
  */
 private val OVERLAP_PAGE_SPACING = (-48).dp
 
@@ -507,11 +439,7 @@ private fun TextAnnotationDialog(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text("Text") },
-                    // ROADMAP.md M3: don't trust Android's default soft-keyboard
-                    // auto-show heuristic, which a connected pedal (seen as a
-                    // hardware keyboard) suppresses -- see showSoftKeyboardOnFocus's
-                    // own doc (SoftKeyboard.kt) for why that would otherwise make
-                    // this field silently untypeable the moment a pedal is paired.
+                    // A connected pedal suppresses Android's soft keyboard; see showSoftKeyboardOnFocus.
                     modifier = Modifier.testTag(TestTags.TEXT_DIALOG_FIELD).showSoftKeyboardOnFocus(),
                 )
                 Row {
@@ -560,10 +488,7 @@ private fun AnnotationToolbar(
             for (candidate in AnnotationMode.entries) {
                 ToolbarModeButton(candidate, isSelected = mode == candidate, onClick = { onModeChange(candidate) })
             }
-            // "Optional half-page/overlap turn behavior" (ROADMAP.md M3) -- a page
-            // -turning preference, not tied to any one AnnotationMode, so it's always
-            // visible here rather than nested under one of the mode-specific blocks
-            // below.
+            // A page-turning preference, not tied to one AnnotationMode, so always visible.
             TextButton(
                 onClick = { onOverlapTurnEnabledChange(!overlapTurnEnabled) },
                 modifier = Modifier.testTag(TestTags.OVERLAP_TURN_TOGGLE),
@@ -665,12 +590,7 @@ private fun BackButton(
     }
 }
 
-/**
- * The one control performance mode (`ROADMAP.md` M3) never hides -- see
- * [ViewerScreen]'s own performance-mode block. Deliberately plain text, not
- * an icon: consistent with [STAMP_PALETTE]'s own reasoning (`AnnotationOverlay.kt`)
- * for avoiding icon-font/glyph dependencies this project doesn't have yet.
- */
+/** The one control performance mode never hides. Plain text rather than an icon, as the project bundles no icon font. */
 @Composable
 private fun PerformanceModeToggle(
     enabled: Boolean,

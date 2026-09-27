@@ -18,12 +18,8 @@ private fun ZipOutputStream.putEntry(
 }
 
 /**
- * One page's raster bytes plus its metadata document, as [SmpkWriter] needs
- * them. [pngBytes] is already-encoded PNG (see `docs/format-spec.md`'s
- * `pages/<page-id>.png` -- PNG rather than the originally-specified WebP for
- * M1, since it's natively supported on both Android and the JVM desktop
- * target with no new codec dependency; see the note at that entry in
- * `docs/format-spec.md`).
+ * One page's raster bytes plus its metadata, as [SmpkWriter] needs them. [pngBytes] is
+ * already-encoded PNG: both Android and the JVM decode it natively, with no extra codec.
  */
 data class SmpkPage(
     val id: String,
@@ -32,17 +28,10 @@ data class SmpkPage(
 )
 
 /**
- * Writes a `.smpk` package (`docs/format-spec.md`) as a zip archive:
- * `manifest.json`, `parts/<part-id>/part.json`, and `pages/<page-id>.png` +
- * `pages/<page-id>.meta.json` per page. M1 is single-part only (multi-part
- * bundling is M5, `docs/format-spec.md`'s "Reserved for later" /
- * `ROADMAP.md` M5), so this writer takes exactly one [Part] rather than a
- * list.
- *
- * Deliberately excluded here (not part of the M1 container shape):
- * `annotations/` (M2), `pages/<id>.raw.jpg` (there's no raster distinct from
- * the displayed page until M4's cleanup pipeline exists), and `thumbnails/`
- * (regenerable cache, deferred).
+ * Writes a `.smpk` package (`docs/format-spec.md`) as a zip archive: `manifest.json`,
+ * `parts/<part-id>/part.json`, and `pages/<page-id>.png` + `.meta.json` per page.
+ * Takes exactly one [Part]: multi-part scores aren't supported yet. Annotations are
+ * added afterwards by [SmpkUpdater].
  */
 object SmpkWriter {
     /** Writes [manifest]/[part]/[pages] to [destination] as a `.smpk` zip, overwriting it if it exists. */
@@ -65,16 +54,10 @@ object SmpkWriter {
 }
 
 /**
- * Reads a `.smpk` package. Backed by [java.util.zip.ZipFile] rather than
- * [java.util.zip.ZipInputStream] specifically so [readManifest] and
- * [readPageBytes] are genuinely random-access -- reading one page's bytes
- * never requires scanning or decompressing every entry before it, which
- * matters once a score has many pages (the same "load only what's on
- * screen" principle `docs/performance.md` applies to annotations applies
- * here to page bytes).
+ * Reads a `.smpk` package. Uses [java.util.zip.ZipFile], not a `ZipInputStream`, so each
+ * entry is random-access: reading one page never decompresses the pages before it.
  *
- * Caller-owned: must be [close]d (or used via [use]) once done, since it
- * holds the underlying zip file open.
+ * Holds the zip file open; [close] it (or use [use]) when done.
  */
 class SmpkReader(
     file: File,
@@ -97,12 +80,8 @@ class SmpkReader(
     }
 
     /**
-     * Reads `annotations/<pageId>.json`. Most pages have never been
-     * annotated, so a missing entry is the *expected* case, not an error --
-     * this returns [AnnotationLayer.empty] for [pageId] rather than
-     * throwing, unlike [readManifest]/[readPart]/[readPageMeta], which
-     * throw on a missing entry because manifest/part/page-meta are always
-     * present for a valid `.smpk`.
+     * Reads `annotations/<pageId>.json`, or returns [AnnotationLayer.empty] if the page has
+     * never been annotated. Unlike the other readers, a missing entry is normal here.
      */
     fun readAnnotationLayer(pageId: String): AnnotationLayer {
         val entry = zip.getEntry("annotations/$pageId.json") ?: return AnnotationLayer.empty(pageId)
@@ -125,34 +104,17 @@ class SmpkReader(
 }
 
 /**
- * Updates a page's annotation layer in an *existing* `.smpk` file on disk
- * (M2: annotation edits happen against a score [SmpkWriter] already wrote
- * during M1 import, not a fresh package). `java.util.zip`'s
- * [ZipOutputStream] has no in-place entry replacement, so the pragmatic
- * approach here is a full rewrite: read every existing entry from [file],
- * write a fresh zip to a sibling temp file with only the target
- * `annotations/<pageId>.json` entry swapped in (every other entry's bytes
- * copied straight through, unchanged and un-recompressed), then atomically
- * replace [file] with it.
+ * Updates a page's annotation layer in an existing `.smpk` file. `java.util.zip` can't
+ * replace an entry in place, so this rewrites the whole package to a sibling temp file
+ * (copying every other entry unchanged) and atomically moves it over [file].
  *
- * This is a real cost -- one full read+rewrite of the package per saved
- * edit, not an incremental append -- but a deliberate M2 scope call, not a
- * shortcut: `.smpk` files are small, single-digit-MB single scores, not
- * whole libraries in one file, so a full rewrite is milliseconds, not a
- * user-visible stall. [app.inkstave.shared.ui.AnnotationOverlay] debounces
- * calls into this (save after a gesture ends and a short idle period) so
- * it runs once per logical edit, not once per pointer-move event. If a
- * later pass finds this is actually a measured bottleneck (e.g. once very
- * large multi-part scores exist, M5+), an incremental zip-patching approach
- * is the candidate optimization -- not needed yet.
+ * A full rewrite per save is fine for single scores of a few MB; callers debounce saves
+ * so this runs once per edit, not per pointer move.
  */
 object SmpkUpdater {
     /**
-     * Replaces (or adds, if none existed) the `annotations/<layer.pageId>.json`
-     * entry in [file] with [layer], leaving every other entry -- manifest,
-     * part, every page's PNG bytes and metadata, and every *other* page's
-     * annotation layer -- untouched. See [SmpkAnnotationUpdateTest] for the
-     * regression test proving untouched entries survive byte-for-byte.
+     * Replaces (or adds) the `annotations/<layer.pageId>.json` entry in [file] with [layer].
+     * Every other entry survives byte-for-byte.
      */
     fun updateAnnotationLayer(
         file: File,
@@ -186,13 +148,8 @@ object SmpkUpdater {
     }
 
     /**
-     * Moves [source] onto [destination], preferring an atomic move (so a
-     * reader never sees a partially-written `.smpk`) but falling back to a
-     * plain move if the filesystem doesn't support atomic moves across
-     * these two paths (e.g. different filesystems -- shouldn't happen here
-     * since [updateAnnotationLayer] creates [source] as a sibling of
-     * [destination], but this is cheap insurance against that assumption
-     * ever being violated).
+     * Moves [source] onto [destination], atomically where the filesystem supports it so a
+     * reader never sees a half-written `.smpk`; otherwise a plain move.
      */
     private fun replaceAtomically(
         source: File,

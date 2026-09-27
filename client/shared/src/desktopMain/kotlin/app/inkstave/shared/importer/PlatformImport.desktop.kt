@@ -8,12 +8,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
-/**
- * Desktop implementation of [renderPdfPages] using Apache PDFBox 3.x
- * (`NOTICE.md` -- Apache-2.0). PDFBox's [PDFRenderer.renderImageWithDPI]
- * does the page-to-raster work directly at [PAGE_RENDER_DPI]; each page is
- * then re-encoded to PNG via [BufferedImage.toPngPage].
- */
+/** Desktop [renderPdfPages] using Apache PDFBox, rendering each page at [PAGE_RENDER_DPI] and encoding it as PNG. */
 actual fun renderPdfPages(pdfBytes: ByteArray): List<DecodedPage> {
     require(pdfBytes.isNotEmpty()) { "pdfBytes must not be empty" }
     val document =
@@ -30,10 +25,7 @@ actual fun renderPdfPages(pdfBytes: ByteArray): List<DecodedPage> {
     }
 }
 
-/**
- * Desktop implementation of [decodeImagePage] using [ImageIO], which covers
- * PNG/JPEG (and several other common formats) without any extra dependency.
- */
+/** Desktop [decodeImagePage] using [ImageIO] (PNG, JPEG, ...). */
 actual fun decodeImagePage(imageBytes: ByteArray): DecodedPage {
     val image =
         ImageIO.read(ByteArrayInputStream(imageBytes))

@@ -36,43 +36,31 @@ import kotlin.math.max
 import kotlin.math.min
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 
-/** The editing tool [AnnotationOverlay] is in. [VIEW] is M1's plain page-viewing behaviour -- unchanged, and the only mode where page-turning gestures are active; see [AnnotationOverlay]'s module doc for why. */
+/** The editing tool [AnnotationOverlay] is in. [VIEW] is plain viewing, the only mode where page-turn gestures are active. */
 enum class AnnotationMode { VIEW, PEN, HIGHLIGHT, STAMP, TEXT, SELECT }
 
-/** The stamped-symbol palette M2 ships with: common notation marks a musician would actually reach for while marking up a part. Drawn as simple vector shapes (or, for forte/piano, plain Latin letters) rather than Unicode musical-symbol glyphs -- those live outside the Basic Multilingual Plane and render as missing-glyph boxes on many default system fonts, on both Android and desktop, without a bundled font (a new dependency this pass deliberately avoids). Vector-drawn shapes have no font-availability risk at all. */
+/**
+ * The stamp symbols offered. Drawn as vector shapes (forte/piano as plain letters) rather than Unicode
+ * musical-symbol glyphs, which lie outside the Basic Multilingual Plane and show as missing-glyph boxes on many
+ * default fonts without bundling one.
+ */
 val STAMP_PALETTE: List<String> = listOf("fermata", "accent", "staccato", "forte", "piano", "repeat")
 
 /**
- * The vector annotation layer for one page (`ROADMAP.md` M2), layered on
- * top of [ViewerScreen]'s page bitmap. Sized via `aspectRatio` to exactly
- * match [pageMeta]'s own proportions -- deliberately, so its measured
- * on-screen size *is* the page content's rendered size with no letterboxing
- * to account for, which is what makes [PagePointSpace]'s pixel<->point
- * conversion correct without extra offset math.
+ * The vector annotation layer for one page, drawn over [ViewerScreen]'s page bitmap. Sized with `aspectRatio` to
+ * match [pageMeta] exactly, so its on-screen size is the rendered page size and [PagePointSpace]'s pixel/point
+ * conversion needs no letterbox offset.
  *
- * **Editing-mode / page-turning interaction, a real UX decision:** while
- * [mode] is anything other than [AnnotationMode.VIEW], the caller
- * ([ViewerScreen]) disables swipe-to-turn and the tap-zone page turn --
- * every pointer gesture over the page is unambiguously for annotating,
- * never accidentally a page turn a drawing gesture happened to resemble.
- * Page turning while editing still works via explicit prev/next buttons in
- * [ViewerScreen]'s toolbar. This trades a small amount of edit-mode
- * convenience for eliminating an entire class of gesture-conflict bugs --
- * the right trade for M2's first pass at this feature.
+ * Outside [AnnotationMode.VIEW], [ViewerScreen] disables swipe and tap-zone page turns, so every gesture over the
+ * page annotates and none turns the page by accident; the toolbar's prev/next buttons still work.
  *
- * Rendering and hit-testing both go through [AnnotationSpatialIndex] (query
- * for drawing -- currently the whole page, since M2 has no page-zoom
- * feature yet to make a true sub-page viewport meaningful; hitTest for
- * [AnnotationMode.SELECT]) rather than iterating [layer]'s lists directly,
- * per `docs/performance.md`.
+ * Drawing and hit-testing go through [AnnotationSpatialIndex] rather than iterating [layer]'s lists
+ * (`docs/performance.md`).
  *
- * @param onCommit called once per completed logical edit (a finished
- * stroke, a placed stamp, a finished drag) with the *new* full layer --
- * never for in-progress gesture state, which is drawn as a local preview
- * instead so intermediate drag positions never pollute undo history.
- * @param onTextPlaceRequested called (in [AnnotationMode.TEXT]) with the
- * page-point coordinates a tap requested a new text note at; the actual
- * text-entry dialog lives in [ViewerScreen], which owns dialog state.
+ * @param onCommit called once per completed edit (finished stroke, placed stamp, finished drag) with the new full
+ *   layer; in-progress gestures are only previewed locally, so they never become undo steps.
+ * @param onTextPlaceRequested called in [AnnotationMode.TEXT] with the page-point position of a tap; the
+ *   text-entry dialog lives in [ViewerScreen].
  */
 @Composable
 fun AnnotationOverlay(
@@ -90,15 +78,12 @@ fun AnnotationOverlay(
     val spatialIndex = remember(layer) { AnnotationSpatialIndex.build(AnnotationItem.allFrom(layer)) }
     val textMeasurer = rememberTextMeasurer()
 
-    // In-progress gesture previews -- pixel-space, never written into `layer` until
-    // the gesture ends, so a half-finished stroke never becomes an undo step.
+    // In-progress gesture previews, in pixels; written into `layer` only when the gesture ends.
     var pendingStrokePx by remember(layer, mode) { mutableStateOf<List<Offset>?>(null) }
     var pendingHighlightPx by remember(layer, mode) { mutableStateOf<Pair<Offset, Offset>?>(null) }
 
-    // A drag in SELECT mode moves whichever item hitTest found at drag-start; these
-    // hold that item's identity and pre-drag geometry so onDrag can compute an
-    // absolute new position from the accumulated delta, not drift from per-step
-    // rounding by repeatedly adding small deltas to already-converted point values.
+    // The dragged item and its pre-drag geometry, so onDrag computes an absolute position from the total
+    // delta instead of accumulating per-step rounding errors.
     var dragTargetId by remember(layer, mode) { mutableStateOf<String?>(null) }
     var dragAccumulatedPx by remember(layer, mode) { mutableStateOf(Offset.Zero) }
 
@@ -184,9 +169,7 @@ fun AnnotationOverlay(
                         dragTargetId = null
                         dragAccumulatedPx = Offset.Zero
                         if (targetId != null && (delta.x != 0f || delta.y != 0f)) {
-                            // pixelToPoint is a pure scale (point = pixel * scale, no translation
-                            // term), so converting a *delta* the same way as a position is exact --
-                            // toPoint(delta) already equals toPoint(position) - toPoint(origin).
+                            // pixelToPoint is a pure scale (no translation), so converting a delta like a position is exact.
                             val (dx, dy) = toPoint(delta)
                             onCommitState.value(moveItem(layer, targetId, dx, dy))
                         }
@@ -194,11 +177,8 @@ fun AnnotationOverlay(
                 ),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Points-per-pixel is uniform across the canvas (PagePointSpace.pixelToPoint's
-            // "one scale for both axes" design) -- this is that same scale factor, needed
-            // here (not just for positions) to size stroke widths and text so they stay a
-            // consistent fraction of page height regardless of the page's actual rendered
-            // pixel size, the same resolution-independence PagePointSpace gives positions.
+            // One uniform scale for both axes, also used to size stroke widths and text so they stay proportional
+            // to the page whatever its rendered size.
             val pxPerPt = (renderedSize.height / PagePointSpace.CANVAS_HEIGHT_PT).toFloat()
             val viewport =
                 AnnoBounds(0.0, 0.0, PagePointSpace.canvasWidthPt(pageMeta.width, pageMeta.height), PagePointSpace.CANVAS_HEIGHT_PT)
@@ -228,7 +208,7 @@ fun AnnotationOverlay(
     }
 }
 
-/** Applies [Modifier.pointerInput] appropriate to [mode] -- one gesture recognizer per mode, never more than one active at once, so gestures never compete for the same pointer stream. */
+/** Installs the one gesture recognizer for [mode], so gestures never compete for the same pointer stream. */
 private fun Modifier.pointerInputForMode(
     mode: AnnotationMode,
     onPenDragStart: (Offset) -> Unit,
@@ -291,7 +271,10 @@ private fun Modifier.pointerInputForMode(
         }
     }
 
-/** Returns [layer] with the item identified by [itemId] moved by ([dxPt], [dyPt]) in page-point space -- a stamp/text note's x/y, or a highlight's whole rect, shifted by that delta. Strokes aren't repositionable in M2 (see `AnnotationOverlay`'s module doc); if [itemId] names one, [layer] is returned unchanged. */
+/**
+ * Returns [layer] with the stamp, text note or highlight [itemId] moved by ([dxPt], [dyPt]) page points. Strokes
+ * can't be moved; for a stroke id, [layer] is returned unchanged.
+ */
 internal fun moveItem(
     layer: AnnotationLayer,
     itemId: String,
@@ -325,7 +308,7 @@ internal fun deleteItem(
         textNotes = layer.textNotes.filterNot { it.id == itemId },
     )
 
-/** Returns [layer] with the stamp identified by [stampId] rescaled by [factor] (e.g. 1.1 to grow, 1/1.1 to shrink) -- M2's resize-handle equivalent for stamps (`ROADMAP.md` M2: "resize"), a pair of toolbar buttons rather than a pinch gesture; see `ViewerScreen`'s toolbar. */
+/** Returns [layer] with stamp [stampId] scaled by [factor] (e.g. 1.1 to grow); driven by toolbar buttons, not pinch. */
 internal fun rescaleStamp(
     layer: AnnotationLayer,
     stampId: String,
@@ -387,9 +370,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationItem(
 
         is AnnotationItem.TextNoteItem -> {
             val topLeft = toPixel(item.textNote.x, item.textNote.y)
-            // fontSizePt is page-point space (same unit as everything else in the layer) --
-            // scale to pixels via pxPerPt like any other length, then to sp via density,
-            // since TextStyle.fontSize takes sp/em, not raw pixels.
+            // fontSizePt is in page points: scale to pixels via pxPerPt, then to sp, since TextStyle takes sp.
             val fontSizeSp = (item.textNote.fontSizePt * pxPerPt / density).sp
             drawText(textMeasurer, item.textNote.text, topLeft = topLeft, style = TextStyle(fontSize = fontSizeSp, color = Color.Black))
         }
@@ -409,7 +390,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotationItem(
     }
 }
 
-/** Draws one stamp at its position, vector-shape (or, for forte/piano, plain-text) per [STAMP_PALETTE] -- see that constant's doc for why no Unicode musical-symbol glyphs are used. */
+/** Draws one stamp as a vector shape, or plain text for forte/piano (see [STAMP_PALETTE]). */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStamp(
     stamp: Stamp,
     toPixel: (Double, Double) -> Offset,
@@ -465,9 +446,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStamp(
             )
         }
 
-        // "forte"/"piano", and anything unrecognised: a plain drawn letter -- ordinary
-        // Latin letters are in the Basic Multilingual Plane, universally renderable by
-        // any default font, no glyph-availability risk (see STAMP_PALETTE's doc).
+        // "forte"/"piano" and anything unrecognised: a plain Latin letter, which every default font can render.
         else -> {
             val label =
                 if (stamp.symbol == "piano") {

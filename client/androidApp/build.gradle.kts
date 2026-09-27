@@ -11,10 +11,6 @@ ktlint {
 
 android {
     namespace = "app.inkstave.android"
-    // compileSdk/targetSdk 37 (Compose Multiplatform 1.12.1's Android
-    // artifacts require it -- see the libs.versions.toml comment on `agp`)
-    // and minSdk 26 (Android 8.0), required for the Bluetooth LE / USB HID
-    // APIs the pedal-input work in M3 (ROADMAP.md) will need.
     compileSdk =
         libs.versions.androidCompileSdk
             .get()
@@ -53,27 +49,16 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
-    // :shared declares these as `implementation`, not `api` (correct encapsulation -- see
-    // shared/build.gradle.kts), so they aren't transitively visible here. androidApp never
-    // needed them directly before CaptureActivity.kt: MainActivity/DocumentPicker only ever
-    // consumed the shared App composable and androidx.activity.compose's setContent, never
-    // Compose Foundation/Material3 symbols themselves.
+    // Needed directly by CaptureActivity; :shared exposes Compose as implementation, not api.
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
-    // suspendCancellableCoroutine, bridging the SAF picker's callback-based
-    // ActivityResultLauncher API into the suspend PickedFile picker functions
-    // app.inkstave.shared.ui.App expects -- see DocumentPicker.kt.
+    // suspendCancellableCoroutine bridges the SAF picker callbacks to suspend functions.
     implementation(libs.kotlinx.coroutines.core)
-    // M4 camera capture (CaptureActivity.kt) -- Android-only, so declared here,
-    // not in :shared (see client/README.md's layout note on where
-    // platform-only code belongs). camera-view specifically for PreviewView.
+    // Camera capture is Android-only, so CameraX lives here, not in :shared.
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-    // CaptureUiStateTest.kt/CameraCaptureTest.kt: plain JVM unit tests (no Robolectric/Android
-    // framework needed -- see those files' own docs). This module had no src/test before M4, so
-    // kotlin-test was never declared here; :shared's equivalent test source sets declare it the
-    // same way (see shared/build.gradle.kts).
+    // The JUnit variant: without the kotlin-android plugin nothing selects it implicitly.
     testImplementation(kotlin("test-junit"))
 }

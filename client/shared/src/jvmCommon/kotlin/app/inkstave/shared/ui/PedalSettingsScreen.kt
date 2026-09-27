@@ -37,21 +37,11 @@ import app.inkstave.shared.pedal.PedalKeyMapping
 import kotlinx.coroutines.delay
 
 /**
- * Lets the user see and change which keys trigger which [PedalAction]
- * (`ROADMAP.md` M3) -- the actual fix for "I have a pedal but don't know
- * what keys it sends": `PedalKeyMapping.DEFAULT` covers the common factory
- * pedal modes out of the box, but this screen's "press the key you want to
- * use" capture flow works for *any* pedal, regardless of what it turns out
- * to send, without the user needing to know in advance.
+ * Shows and edits which keys trigger which [PedalAction]. The "press the key you want to use" capture flow works
+ * for any pedal, whatever it sends, so users don't need to know their pedal's key codes.
  *
- * The only navigation entry point is [LibraryScreen]'s "Pedal Settings"
- * action -- there's no broader settings surface yet for this to live
- * under.
- *
- * @param onRawKeyHandlerChange the same Android key-dispatch bridge
- *   [ViewerScreen] uses (see its `onRawKeyHandlerChange` doc for the full
- *   reasoning) -- only registered here while [capturingFor] is non-null, so
- *   a stray key press the rest of the time does nothing.
+ * @param onRawKeyHandlerChange the Android key-dispatch bridge [ViewerScreen] also uses; registered only while
+ *   [capturingFor] is non-null, so stray key presses do nothing otherwise.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,10 +74,7 @@ fun PedalSettingsScreen(
         onDispose { onRawKeyHandlerChange(null) }
     }
 
-    // The capture confirmation ("Bound X to Y") is a one-shot toast-like message,
-    // not a permanent status line -- clears itself after a few seconds so it reads
-    // as "here's what just happened," not stale leftover text under the row the
-    // next time the user looks at this screen.
+    // The "Bound X to Y" confirmation is transient, so it clears itself after a few seconds.
     LaunchedEffect(lastCaptured) {
         if (lastCaptured != null) {
             delay(CAPTURE_CONFIRMATION_MILLIS)
@@ -105,9 +92,8 @@ fun PedalSettingsScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
-            // weight(1f), not fillMaxSize(): fillMaxSize made the list claim all remaining
-            // height, pushing the capture prompt and the Reset/Back row off-screen -- on a
-            // real tablet there was no way to leave this screen except the system back gesture.
+            // weight(1f), not fillMaxSize(): filling the height pushed the capture prompt and the Reset/Back row
+            // off-screen.
             LazyColumn(modifier = Modifier.weight(1f).padding(top = 12.dp)) {
                 items(PedalAction.entries) { action ->
                     PedalActionRow(
@@ -161,9 +147,8 @@ private fun PedalActionRow(
             }
         }
         if (isCapturing) {
-            // Desktop's half of the capture flow -- see PedalSettingsScreen's
-            // onRawKeyHandlerChange doc for why Android additionally needs the
-            // Activity-dispatch bridge, not just this.
+            // Desktop's half of key capture; Android also needs the Activity-dispatch bridge
+            // (see onRawKeyHandlerChange).
             CaptureSurface(
                 prompt = "Press the key you want to use for ${actionLabel(action)} now…",
                 onKeyCaptured = onKeyCapturedFromComposeFocus,
@@ -188,9 +173,7 @@ private fun BindingChip(
     ) {
         Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(keyDisplayName(key))
-            // Its own testTag, not just the chip Surface's: a UI test's performClick
-            // needs to target an actually-clickable node directly, not a non
-            // -clickable wrapper it merely happens to be nested inside.
+            // Own testTag: UI tests must click the clickable node itself, not its non-clickable wrapper.
             TextButton(
                 onClick = onRemove,
                 modifier = Modifier.padding(start = 4.dp).testTag(TestTags.pedalBindingChipRemove(action, key)),
@@ -200,13 +183,9 @@ private fun BindingChip(
 }
 
 /**
- * The actual key-listening surface: requests focus as soon as it appears,
- * then reports the very next key press. Desktop-reliable on its own
- * (Compose Desktop has no touch-mode concept to fight); on Android it's a
- * secondary path behind [PedalSettingsScreen]'s `onRawKeyHandlerChange`
- * registration -- harmless if both somehow fired for the same physical
- * press (both call the same [onKeyCaptured], which just re-applies the same
- * binding), and a useful fallback if the Android bridge is ever unavailable.
+ * The key-listening surface: requests focus when shown, then reports the next key press. Enough on desktop; on
+ * Android it backs up [PedalSettingsScreen]'s `onRawKeyHandlerChange` bridge. If both fire for one press they
+ * apply the same binding, which is harmless.
  */
 @Composable
 private fun CaptureSurface(
@@ -242,12 +221,8 @@ private fun actionLabel(action: PedalAction): String =
     }
 
 /**
- * A human-readable name for [key] where one is known (everything
- * [PedalKeyMapping.DEFAULT] uses, plus a handful of other common keys a
- * remap might reasonably capture); otherwise the raw key code, which is
- * still meaningful to show (lets a user confirm "yes, that's a different
- * code each time I press it" while debugging an unfamiliar pedal) even
- * though it isn't a friendly name.
+ * A readable name for [key] when one is known, otherwise its raw key code, which still lets a user check that an
+ * unfamiliar pedal sends a distinct code per button.
  */
 internal fun keyDisplayName(key: Key): String =
     when (key) {

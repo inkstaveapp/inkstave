@@ -1,12 +1,4 @@
-"""Shared types for the pipeline package.
-
-Kept separate from any one stage module since several stages share them
-(:class:`Point`, :class:`ImageU8`) or are consumed outside the pipeline
-package entirely (:class:`AspectRatioClass` mirrors
-``format/schema/page-meta.v1.schema.json``'s ``aspectRatioClass`` enum and
-``inkstave_format``'s ``PageMeta`` -- see :mod:`inkstave_processing.pipeline.normalize`
-for why it's redeclared here rather than imported, despite the overlap).
-"""
+"""Types shared by the pipeline stages and by callers outside the package."""
 
 from __future__ import annotations
 
@@ -16,20 +8,14 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-#: An 8-bit image array: ``(height, width, 3)`` for BGR (OpenCV's native
-#: channel order) or ``(height, width)`` for single-channel grayscale.
-#: OpenCV's own stubs type most of its functions' return values more loosely
-#: than this (see :mod:`inkstave_processing.pipeline.cv_backend`'s module
-#: docstring) -- this alias is this package's own, precise contract for
-#: what a stage actually hands the next one.
+#: An 8-bit image: ``(height, width, 3)`` BGR (OpenCV's channel order) or
+#: ``(height, width)`` grayscale.
 ImageU8 = NDArray[np.uint8]
 
-#: A single ``(x, y)`` pixel coordinate, as floats since sub-pixel positions
-#: arise throughout (contour points, fitted curve samples, remap grids).
+#: An ``(x, y)`` pixel coordinate; floats because positions are sub-pixel.
 Point = tuple[float, float]
 
-#: Mirrors ``format/schema/page-meta.v1.schema.json``'s ``aspectRatioClass``
-#: enum exactly (``docs/format-spec.md``, ``pages/<page-id>.meta.json``).
+#: Mirrors the ``aspectRatioClass`` enum in ``page-meta.v1.schema.json``.
 AspectRatioClass = Literal["a4", "letter", "custom"]
 
 
@@ -37,18 +23,11 @@ AspectRatioClass = Literal["a4", "letter", "custom"]
 class GeometricCorrectionResult:
     """Output of :func:`inkstave_processing.pipeline.geometry.geometric_correct`.
 
-    :ivar image: the corrected page, cropped to its own bounds -- this *is*
-        the "cropping" stage `docs/image-pipeline.md` lists separately; see
-        that module's docstring for why cropping isn't its own function here.
-    :ivar crop_polygon: the detected page corners in the *original* (input)
-        image's pixel coordinates, ``[TL, TR, BR, BL]`` -- this is exactly
-        `docs/format-spec.md`'s ``pages/<page-id>.meta.json``'s
-        ``processing.cropPolygon`` shape.
-    :ivar dewarp_mesh_version: identifies which correction model produced
-        `image`, for `docs/format-spec.md`'s
-        ``processing.dewarpMeshVersion`` (reprocessing/reproducibility) --
-        see :mod:`inkstave_processing.pipeline.geometry`'s docstring for
-        the honest scope of what this value's model actually corrects for.
+    :ivar image: the corrected page, already cropped to its bounds.
+    :ivar crop_polygon: page corners in the input image's pixels,
+        ``[TL, TR, BR, BL]`` (``processing.cropPolygon``).
+    :ivar dewarp_mesh_version: the correction model that produced `image`
+        (``processing.dewarpMeshVersion``).
     """
 
     image: ImageU8
@@ -60,13 +39,8 @@ class GeometricCorrectionResult:
 class ContrastResult:
     """Output of :func:`inkstave_processing.pipeline.contrast.enhance_contrast`.
 
-    :ivar image: single-channel (grayscale) output -- contrast cleanup
-        operates on and produces grayscale, per `docs/image-pipeline.md`
-        ("crisp black notation on a clean white background"); color isn't
-        meaningful for sheet music and carrying it through would only cost
-        memory/bandwidth for nothing this format needs.
-    :ivar contrast_method: for `docs/format-spec.md`'s
-        ``processing.contrastMethod``.
+    :ivar image: grayscale output; colour carries no information in sheet music.
+    :ivar contrast_method: stored as ``processing.contrastMethod``.
     """
 
     image: ImageU8
@@ -85,20 +59,11 @@ class NormalizeResult:
 
 @dataclass(frozen=True)
 class ProcessedPage:
-    """The full pipeline's output for one page
-    (:func:`inkstave_processing.pipeline.run.process_page`) -- geometry,
-    contrast, normalization, *and* OCR (M4 slice 2) combined, matching
-    `docs/image-pipeline.md`'s stage list 1-6 as one end-to-end operation.
+    """The full pipeline's output for one page (:func:`run.process_page`).
 
-    Deliberately shaped to drop straight into `inkstave_format`'s
-    ``PageProcessing``/``PageOcr``/``PageMeta`` fields without reshaping --
-    see those models' fields (``crop_polygon``, ``dewarp_mesh_version``,
-    ``contrast_method``, ``engine_version``, ``candidates``, ``confidence``)
-    and `format/schema/page-meta.v1.schema.json`. ``ocr_candidates``/
-    ``ocr_confidence`` are exactly what `inkstave_processing.pipeline.ocr`
-    returns -- see that module's docstring for why they're *always
-    proposals*, never something this type (or anything downstream) should
-    treat as already-confirmed metadata.
+    Fields map directly onto `inkstave_format`'s ``PageProcessing``,
+    ``PageOcr`` and ``PageMeta``. The OCR fields are proposals, never
+    confirmed metadata.
     """
 
     image: ImageU8

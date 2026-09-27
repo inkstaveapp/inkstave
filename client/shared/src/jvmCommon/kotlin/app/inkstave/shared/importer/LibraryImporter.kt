@@ -7,15 +7,9 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The M1 import entry point: given raw PDF or image bytes, renders/decodes
- * them to pages (`PlatformImport.*.kt`), builds a score
- * ([ImportPipeline]), writes it into [libraryDirectory] as a `.smpk`
- * (`SmpkWriter`), and upserts it into [index] (ADR-0005) so the library
- * screen reflects it immediately without a restart or a rescan.
- *
- * Owns the one place all three of those steps happen together, so a caller
- * (the library screen's import action) can't accidentally do one without
- * the others and leave the index out of sync with the files on disk.
+ * Imports PDFs, images or processed pages: builds the score, writes it to [libraryDirectory] as a
+ * `.smpk`, and updates [index]. Writing and indexing always happen together here, so the index
+ * can't fall out of sync with the files (ADR-0005).
  */
 class LibraryImporter(
     private val libraryDirectory: File,
@@ -31,12 +25,7 @@ class LibraryImporter(
         return importDecodedPages(title, "pdf-import", originalFilename, pages)
     }
 
-    /**
-     * Imports a set of images, in the order given -- that order becomes the
-     * score's page order, so callers must sort [imageFiles] into the
-     * intended reading order before calling this (M1 has no in-app
-     * reordering UI).
-     */
+    /** Imports images as pages, in the order given: callers must pass them in reading order. */
     fun importImages(
         title: String,
         imageFiles: List<ByteArray>,
@@ -47,14 +36,8 @@ class LibraryImporter(
     }
 
     /**
-     * Imports a set of already-*processed* pages (`docs/image-pipeline.md`'s cleanup/OCR
-     * pipeline has already run on each one -- see [ProcessedPage]) as a `"camera-capture"`
-     * -sourced score. The M4 counterpart to [importImages]: same write-then-index contract, but
-     * each page's `PageMeta.processing`/`PageMeta.ocr` carry the pipeline's real data instead of
-     * `null`. The only caller is a received capture session that a paired desktop's
-     * `processing-service` was reachable for (`CaptureSessionReceiver`) -- when it isn't, that
-     * caller falls back to [importImages] with the original, unprocessed photo bytes instead of
-     * calling this.
+     * Imports pages already cleaned up by `processing-service` as a `"camera-capture"` score, keeping
+     * their processing and OCR metadata. When the service is unreachable, callers use [importImages].
      */
     fun importProcessedPages(
         title: String,
@@ -77,9 +60,7 @@ class LibraryImporter(
         return writeAndIndex(imported)
     }
 
-    /** The write-then-index tail [importPdf]/[importImages]/[importProcessedPages] all share --
-     * see this class's own doc for why that pairing always happens together, never one without
-     * the other. */
+    /** Writes the `.smpk` and updates the index, together. */
     private fun writeAndIndex(imported: ImportedScore): Manifest {
         val destination = File(libraryDirectory, "${imported.manifest.id}.smpk")
         SmpkWriter.write(destination, imported.manifest, imported.part, imported.pages)

@@ -28,8 +28,7 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
-    // withContext(Dispatchers.IO), wrapping the blocking JFileChooser call --
-    // see DesktopFilePicker.kt.
+    // Dispatchers.IO for the blocking JFileChooser call in DesktopFilePicker.
     implementation(libs.kotlinx.coroutines.core)
 }
 
@@ -38,10 +37,7 @@ compose.desktop {
         mainClass = "app.inkstave.desktop.MainKt"
 
         nativeDistributions {
-            // Flatpak/AppImage packaging specifics are linux-desktop's call
-            // (ROADMAP.md M7) -- this just lists a sane default set of
-            // formats so `./gradlew :desktopApp:packageDistributionForCurrentOS`
-            // produces something runnable during scaffolding/dev.
+            // Placeholder formats for dev builds; real Linux packaging is not designed yet.
             targetFormats(TargetFormat.Deb, TargetFormat.AppImage)
             packageName = "Inkstave"
             packageVersion = "0.1.0"

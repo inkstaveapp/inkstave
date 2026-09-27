@@ -1,11 +1,6 @@
-"""JSON Schema validation for the .smpk format's documents.
-
-These check *shape* against the schemas in ``format/schema/`` -- the
-"spec / contract" level test `docs/testing-strategy.md` calls for -- as a
-layer distinct from (and complementary to) the typed models in
-``models.py``. A document can fail schema validation for reasons the typed
-models wouldn't catch on their own (e.g. an out-of-range ``confidence``
-value), and vice versa.
+"""JSON Schema validation against ``format/schema/``. Complements the typed
+models: schemas catch things the models don't (e.g. an out-of-range
+confidence), and vice versa.
 """
 
 from __future__ import annotations

@@ -4,14 +4,7 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import java.io.File
 
-/**
- * Builds the [SqlDriver] the desktop app passes into [LibraryIndexRepository],
- * backed by a real SQLite file at [databaseFile] (the same JDBC driver
- * `docs/decisions/0001-client-framework.md` already commits to for the
- * desktop target). Runs [InkstaveDatabase.Schema.create] once, the first
- * time the database file doesn't exist yet -- on every later launch the
- * existing file is opened as-is.
- */
+/** Builds the [SqlDriver] for [LibraryIndexRepository], backed by the SQLite file [databaseFile]; creates the schema if the file is new. */
 class DesktopSqlDriverFactory(
     private val databaseFile: File,
 ) {

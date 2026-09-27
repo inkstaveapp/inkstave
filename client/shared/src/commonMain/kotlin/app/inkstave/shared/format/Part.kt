@@ -12,15 +12,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /**
- * One part's `parts/<part-id>/part.json` (see `docs/format-spec.md`,
- * "`parts/<part-id>/part.json`"). A single-part score (M1's only case) still
- * has exactly one of these -- there is no special-cased "no parts" mode, so
- * M5's multi-part support is additive, not a migration.
+ * One part's `parts/<part-id>/part.json` (`docs/format-spec.md`). A single-part score still has
+ * exactly one, so multi-part support can be added without a migration.
  *
- * [unknownFields] preserves any JSON object keys this model doesn't
- * recognise yet, the same forward-compatibility guarantee [Manifest] makes;
- * see [Manifest.unknownFields] for why this matters and [PartJson] for how
- * it's implemented.
+ * [unknownFields] preserves unrecognised keys; see [Manifest.unknownFields].
  */
 @Serializable
 data class Part(
@@ -34,10 +29,7 @@ data class Part(
 /** JSON object keys [Part] models directly; everything else is an "unknown field". */
 private val KNOWN_PART_KEYS = setOf("id", "name", "pageOrder")
 
-/**
- * Reads and writes [Part] as `part.json` text, preserving unrecognised keys.
- * See [ManifestJson] -- same approach, applied to the smaller `part.json` shape.
- */
+/** Reads and writes [Part] as JSON, preserving unrecognised keys (same approach as [ManifestJson]). */
 object PartJson {
     private val json =
         Json {

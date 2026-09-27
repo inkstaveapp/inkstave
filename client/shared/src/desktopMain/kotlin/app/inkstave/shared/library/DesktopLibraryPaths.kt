@@ -2,14 +2,7 @@ package app.inkstave.shared.library
 
 import java.io.File
 
-/**
- * Where the desktop app keeps its library (`.smpk` files) and local index
- * database (ADR-0005) by default -- there's no settings UI to override this
- * yet (`docs/format-spec.md`'s "Local index vs. source of truth" section;
- * `ROADMAP.md` doesn't call for one until later). Follows the XDG Base
- * Directory convention (`$XDG_DATA_HOME`, falling back to `~/.local/share`
- * per the spec), the standard Linux convention for a desktop app's own data.
- */
+/** Where the desktop app keeps its `.smpk` library and index database: under `$XDG_DATA_HOME` (default `~/.local/share`). */
 object DesktopLibraryPaths {
     private const val APP_DIR_NAME = "inkstave"
 

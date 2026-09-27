@@ -1,6 +1,4 @@
-"""Integration test for the /health endpoint, per docs/testing-strategy.md's
-"Desktop client <-> processing-service" integration-test requirement --
-this hits the real FastAPI app through its HTTP interface, not a mock."""
+"""Integration test for /health through the real FastAPI app."""
 
 from __future__ import annotations
 

@@ -8,11 +8,7 @@ import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
 
-/**
- * Service type per `docs/sync-protocol.md`'s "Discovery" -- `_inkstave`, matching this project's
- * name (the doc previously said `_smreader`, a leftover from before the Inkstave rename;
- * corrected here and in that doc together).
- */
+/** mDNS service type for Inkstave (`docs/sync-protocol.md`). */
 const val SYNC_SERVICE_TYPE = "_inkstave._tcp.local."
 
 private const val PROPERTY_DEVICE_ID = "deviceId"
@@ -22,17 +18,11 @@ private const val ACTIVE_QUERY_TIMEOUT_MILLIS = 3_000L
 private const val ACTIVE_QUERY_INTERVAL_MILLIS = 2_000L
 
 /**
- * The only [SyncDiscovery] implementation for v1 (`docs/decisions/0003-sync-approach.md`), backed
- * by [JmDNS] -- pure Java, no native code, no platform-specific mDNS binding needed, so this one
- * class works unmodified on both `androidMain` and `desktopMain` (unlike, say, `PageBitmap`'s
- * genuinely platform-divergent decoding, this doesn't need an `expect`/`actual` split at all).
+ * [SyncDiscovery] backed by [JmDNS] (pure Java, so it works unchanged on Android and desktop).
  *
- * Runs one [JmDNS] responder per real LAN interface ([lanAddresses]), advertising and browsing on
- * all of them. A single responder bound to one interface proved unreliable on real hardware: a
- * desktop with both Ethernet and Wi-Fi picked Wi-Fi, and a tablet on the same Wi-Fi then saw the
- * desktop on only 2 of 5 cold starts (multicast between two Wi-Fi clients through the access
- * point was being lost); bound to Ethernet it found the desktop on 8 of 8. Covering every
- * interface avoids having to guess which one is reliable on a given network.
+ * Runs one responder per real LAN interface ([lanAddresses]) rather than guessing one: multicast
+ * between two Wi-Fi clients is often lost at the access point, so the interface that happens to be
+ * chosen may never see the other device.
  */
 class JmDnsSyncDiscovery private constructor(
     private val responders: List<JmDNS>,
@@ -42,11 +32,8 @@ class JmDnsSyncDiscovery private constructor(
     @Volatile private var closed = false
 
     /**
-     * Advertises [identity] under [SYNC_SERVICE_TYPE], reachable on [port], offering [roles] in its
-     * TXT record, on every responder. The display name also travels in the TXT record: separate
-     * responders in one process (and the separate pairing/sync listeners) register the same
-     * instance name, which JmDNS resolves by renaming to "Name (2)", "Name (3)" -- an internal
-     * detail that shouldn't reach the UI.
+     * Advertises [identity] on every responder. The display name also goes in the TXT record,
+     * because JmDNS renames duplicate instance names ("Name (2)") and that must not reach the UI.
      */
     override fun advertise(
         identity: DeviceIdentity,
@@ -68,13 +55,9 @@ class JmDnsSyncDiscovery private constructor(
     }
 
     /**
-     * Reports devices via JmDNS's passive listener *and* an active re-query loop, on every
-     * responder, merging each device's addresses across responders ([MergingDeviceListener]). The
-     * passive listener alone proved unreliable on real hardware: a single dropped multicast packet
-     * -- routine on Wi-Fi -- means it simply never fires. [JmDNS.list] sends a fresh query and waits
-     * for answers, so polling it every few seconds turns "one lost packet = never discovered" into
-     * "found on the next round". Reporting the same device repeatedly is harmless:
-     * [SyncDeviceListener.onDeviceFound] is documented as "advertised, or its info changed."
+     * Reports devices via the passive listener plus an active re-query every few seconds, on every
+     * responder, merging addresses per device. The passive listener alone misses devices after a
+     * single dropped multicast packet. Repeated reports of the same device are harmless.
      */
     override fun browse(listener: SyncDeviceListener) {
         val merged = MergingDeviceListener(listener)
@@ -112,17 +95,10 @@ class JmDnsSyncDiscovery private constructor(
 
     companion object {
         /**
-         * A fresh [JmDnsSyncDiscovery] with one responder per address in [lanAddresses] (or just the
-         * [ADDRESS_OVERRIDE_ENV] address when that is set), falling back to the platform's own
-         * default-interface guess (`JmDNS.create()`'s no-arg form) only when no usable address
-         * exists at all. An interface whose responder fails to start is skipped rather than
-         * failing discovery as a whole.
-         *
-         * The default guess is not reliable enough to trust as-is: on real hardware, with
-         * Docker-style virtual networking present (this project's own dev machine has a dozen
-         * `br-*`/`docker0` bridges alongside its two real LAN interfaces), it produced an
-         * advertisement carrying only an IPv6 link-local address without a usable scope, so a
-         * phone trying to pair got `connect() failed: EINVAL` on every attempt.
+         * One responder per address in [lanAddresses] (or only the [ADDRESS_OVERRIDE_ENV] address),
+         * falling back to JmDNS's own interface guess only when none exists. Responders that fail to
+         * start are skipped. The default guess is unreliable with container bridges present: it can pick
+         * an unroutable IPv6 link-local address.
          */
         fun create(): JmDnsSyncDiscovery {
             val addresses = parseAddressOverride(System.getenv(ADDRESS_OVERRIDE_ENV))?.let(::listOf) ?: lanAddresses()
@@ -137,11 +113,7 @@ class JmDnsSyncDiscovery private constructor(
             return JmDnsSyncDiscovery(responders.ifEmpty { listOf(JmDNS.create()) })
         }
 
-        /**
-         * Name of the environment variable that restricts mDNS to one interface address, bypassing
-         * [lanAddresses] -- for testing against an emulator on a private virtual bridge, or for
-         * pinning discovery to one interface when diagnosing a network.
-         */
+        /** Environment variable restricting mDNS to one IPv4 address (emulator testing, diagnosis). */
         const val ADDRESS_OVERRIDE_ENV = "INKSTAVE_MDNS_ADDRESS"
 
         private val IPV4_LITERAL = Regex("\\d{1,3}(\\.\\d{1,3}){3}")
@@ -154,11 +126,8 @@ class JmDnsSyncDiscovery private constructor(
         }
 
         /**
-         * Every real, LAN-routable IPv4 address this device has: interfaces that are up, support
-         * multicast, aren't loopback, and aren't named like virtual/container networking or
-         * cellular data ([isLikelyVirtual]); loopback and link-local addresses excluded. A name
-         * heuristic, not a perfect one, but container/VM tooling overwhelmingly uses these
-         * conventions, and a phone is never going to reach this device over one of them.
+         * Every LAN-routable IPv4 address: interfaces that are up and multicast-capable, excluding
+         * loopback, link-local, and interfaces named like container/VM or cellular networking.
          */
         private fun lanAddresses(): List<Inet4Address> =
             NetworkInterface
@@ -183,10 +152,9 @@ class JmDnsSyncDiscovery private constructor(
 }
 
 /**
- * Combines the per-responder sightings of one device into a single [DiscoveredDevice] whose
- * [DiscoveredDevice.hosts] lists every address it has been seen at, in first-seen order. Keyed by
- * (deviceId, port): the same deviceId on another port is a genuinely different listener (a
- * desktop's pairing server vs. its sync server) and must stay a separate entry.
+ * Merges one device's sightings across responders into a single [DiscoveredDevice] listing every
+ * address, in first-seen order. Keyed by (deviceId, port): another port on the same device is a
+ * different listener (pairing vs. sync server) and stays a separate entry.
  */
 internal class MergingDeviceListener(
     private val delegate: SyncDeviceListener,
@@ -208,25 +176,14 @@ internal class MergingDeviceListener(
 }
 
 /**
- * Bridges [JmDNS]'s own [ServiceListener] callback shape to [SyncDeviceListener], and does the
- * one piece of real translation work: [ServiceListener.serviceAdded] fires with a bare name and
- * no resolved address/TXT-record data yet (per JmDNS's own contract), so this only reports a
- * device via [SyncDeviceListener.onDeviceFound] once [ServiceListener.serviceResolved] actually
- * has that data -- reporting on `serviceAdded` instead would hand callers a [DiscoveredDevice]
- * with no real host/port/roles to act on.
+ * Adapts JmDNS's [ServiceListener] to [SyncDeviceListener], reporting a device only once it has
+ * resolved (`serviceAdded` carries no address, port or TXT data yet).
  */
 private class JmDnsListenerAdapter(
     private val jmdns: JmDNS,
     private val listener: SyncDeviceListener,
 ) : ServiceListener {
-    /**
-     * Explicitly asks JmDNS to resolve the service (address, port, TXT record). Ignoring this
-     * callback left resolution to chance: JmDNS only fires `serviceResolved` on its own when the
-     * full record set happens to arrive alongside the announcement, so on real hardware (a phone
-     * and a desktop, both running this class, both visible to `avahi-browse` the whole time)
-     * neither app's in-process browse would find the other for minutes, or at all, depending on
-     * packet timing. `requestServiceInfo` is the documented way to make resolution deterministic.
-     */
+    /** Requests resolution explicitly; otherwise JmDNS may never fire `serviceResolved`. */
     override fun serviceAdded(event: ServiceEvent) {
         jmdns.requestServiceInfo(event.type, event.name)
     }
@@ -241,9 +198,7 @@ private class JmDnsListenerAdapter(
     }
 }
 
-/** `null` if [ServiceInfo] is missing the [PROPERTY_DEVICE_ID] property or has no resolved address -- an
- * advertisement this app itself didn't create (or one that hasn't finished resolving), not a valid discovery
- * result to surface. */
+/** `null` when the service has no [PROPERTY_DEVICE_ID] (not ours) or no resolved address yet. */
 private fun ServiceInfo.toDiscoveredDevice(): DiscoveredDevice? {
     val deviceId = getPropertyString(PROPERTY_DEVICE_ID) ?: return null
     val host = preferredHostAddress() ?: return null
@@ -258,16 +213,7 @@ private fun ServiceInfo.toDiscoveredDevice(): DiscoveredDevice? {
 }
 
 /**
- * An IPv4 address, if this service resolved one at all; only falls back to IPv6 if it truly
- * didn't. [ServiceInfo.getHostAddresses] (what this used to use, via `.firstOrNull()`) returns
- * whatever mix of IPv4/IPv6 addresses JmDNS resolved in whatever order it happened to produce
- * them -- on real hardware this picked an IPv6 address literally the first time two real devices
- * (a phone and a desktop) ever tried to pair, and `Socket.connect()` to it failed outright
- * (`EINVAL` on Android, a terminated TLS handshake on desktop) -- consistent with a link-local
- * IPv6 address JmDNS resolved without the network-interface scope id a bare address string needs
- * to actually be routable (the same class of Android/JmDNS network-interface friction the
- * `NetworkTopologyDiscoveryImpl` crash already found). A typical home LAN always has IPv4
- * available, so preferring it sidesteps needing to get IPv6 scope-id handling right at all,
- * rather than attempting that and hoping it's correct.
+ * Prefers IPv4, falling back to IPv6 only if none resolved: bare IPv6 link-local addresses carry no
+ * scope id and can't be connected to.
  */
 private fun ServiceInfo.preferredHostAddress(): String? = inet4Addresses.firstOrNull()?.hostAddress ?: hostAddresses.firstOrNull()

@@ -5,14 +5,9 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 
 /**
- * The real trust decision for every connection *after* pairing (`docs/sync-protocol.md`:
- * "Every subsequent connection between two devices must be from an already-paired device"):
- * accepts a peer's certificate chain iff the leaf certificate's SHA-256 fingerprint
- * ([CertificateFingerprint.sha256]) is in [trustStore] -- nothing else about the certificate
- * (its subject name, its validity dates in the usual CA-trust sense, any issuer chain) is
- * consulted, since these are self-signed identity certificates with no CA behind them; the
- * fingerprint *is* the trust anchor, pinned by a human during pairing (`PairingSession`), not
- * derived from any PKI hierarchy.
+ * The trust decision for every connection after pairing: accepts a chain only if the leaf
+ * certificate's SHA-256 fingerprint is in [trustStore]. Subject, validity and issuer are not
+ * consulted; these are self-signed certificates and the pinned fingerprint is the trust anchor.
  */
 class PinnedFingerprintTrustManager(
     private val trustStore: PeerTrustStore,
@@ -41,15 +36,9 @@ class PinnedFingerprintTrustManager(
 }
 
 /**
- * **Pairing only -- never used for an authenticated data connection.** Accepts any certificate
- * whatsoever, so the initial TLS handshake with a not-yet-trusted device can complete at all
- * (there is, by definition, nothing to pin yet the first time two devices meet). `PairingSession`
- * is the only caller of this: it uses the connection this trust manager permits solely to let a
- * human *look at* the presented certificate's fingerprint and decide whether to trust it --
- * before that confirmation, the connection carries no data operation
- * (`docs/sync-protocol.md`: "discovery of an unpaired device only offers 'pair with this
- * device,' never any data operation"). Using this trust manager for anything other than the
- * pairing exchange itself would defeat the entire pinning model.
+ * **Pairing only; never use for a data connection.** Accepts any certificate, because on first
+ * contact there is nothing to pin yet. `PairingSession` uses it only so a human can compare the
+ * confirmation code; the connection carries no data. Using it anywhere else defeats pinning.
  */
 object TrustAnyPeerCertificate : X509TrustManager {
     override fun checkClientTrusted(

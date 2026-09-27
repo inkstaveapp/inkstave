@@ -12,19 +12,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /**
- * A page's `annotations/<page-id>.json` (see `docs/format-spec.md`,
- * "`annotations/<page-id>.json`"): the full vector annotation layer for one
- * page -- freehand strokes, stamped symbols, highlighted regions, and text
- * notes, all in normalized page-point space (`app.inkstave.shared.annotation.PagePointSpace`)
- * so the same layer renders correctly regardless of the page raster's pixel
- * resolution or the viewing device's screen size.
+ * A page's `annotations/<page-id>.json` (`docs/format-spec.md`): its strokes, stamps, highlights
+ * and text notes, in page-point space (`app.inkstave.shared.annotation.PagePointSpace`) so they
+ * render the same at any raster resolution or screen size.
  *
- * [unknownFields] preserves any JSON object keys this model doesn't
- * recognise yet, the same forward-compatibility guarantee [Manifest] makes;
- * see [Manifest.unknownFields]. The four sub-object types ([Stroke],
- * [Stamp], [Highlight], [TextNote]) do not individually track unknown
- * fields, matching [PageProcessing]/[PageOcr]'s precedent -- only the
- * top-level document type does.
+ * [unknownFields] preserves top-level keys this model doesn't recognise, as [Manifest] does. The
+ * nested objects don't track unknown fields.
  */
 @Serializable
 data class AnnotationLayer(
@@ -37,7 +30,7 @@ data class AnnotationLayer(
     @Transient
     val unknownFields: Map<String, JsonElement> = emptyMap(),
 ) {
-    /** An [AnnotationLayer] with no annotations for [pageId] -- what [SmpkReader.readAnnotationLayer] returns for a page that has never been annotated. */
+    /** An empty layer for [pageId], used for pages that have never been annotated. */
     companion object {
         fun empty(pageId: String): AnnotationLayer = AnnotationLayer(pageId = pageId, layerVersion = 1)
     }
@@ -56,10 +49,8 @@ data class Stroke(
 )
 
 /**
- * One placed stamped-symbol annotation (see `AnnotationOverlay.kt`'s
- * `STAMP_PALETTE` for the symbols M2 ships with). [x]/[y] are the stamp's
- * center in page-point space; [scale] is a multiplier on its base drawn
- * size (1.0 = default); [rotationDeg] is clockwise rotation in degrees.
+ * One placed stamp symbol. [x]/[y] are its centre in page-point space, [scale] multiplies its base
+ * size (1.0 = default), and [rotationDeg] is clockwise rotation.
  */
 @Serializable
 data class Stamp(
@@ -92,10 +83,7 @@ data class TextNote(
 /** JSON object keys [AnnotationLayer] models directly; everything else is an "unknown field". */
 private val KNOWN_ANNOTATION_LAYER_KEYS = setOf("pageId", "layerVersion", "strokes", "stamps", "highlights", "textNotes")
 
-/**
- * Reads and writes [AnnotationLayer] as `<page-id>.json` text, preserving
- * unrecognised top-level keys. See [ManifestJson] -- same approach.
- */
+/** Reads and writes [AnnotationLayer] as JSON, preserving unrecognised top-level keys (same approach as [ManifestJson]). */
 object AnnotationLayerJson {
     private val json =
         Json {

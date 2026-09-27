@@ -31,48 +31,28 @@ private sealed interface Screen {
 }
 
 /**
- * The whole app, as a single Compose Multiplatform UI tree shared by both
- * `androidApp` and `desktopApp` (`docs/architecture.md`) -- this replaced
- * M0's static placeholder once M1's real library/viewer screens existed.
- * Navigation is a two-screen stack (library, viewer) held as plain
- * `remember`ed state; there's no navigation library dependency yet because
- * two screens don't need one -- reconsider once M2+ adds more.
+ * The whole app: one Compose UI tree shared by `androidApp` and `desktopApp`. Navigation is plain `remember`ed
+ * state over [Screen]; there are too few screens to justify a navigation library.
  *
  * @param libraryIndex the local index (ADR-0005) the library screen lists from.
- * @param importer writes newly-picked PDFs/images into the library as `.smpk` files.
- * @param pickPdf launches the platform's file picker for a single PDF; `null` means the user cancelled.
- * @param pickImages launches the platform's file picker for one or more image files, in the order to import them.
- * @param captureImages launches the in-app camera capture flow (`ROADMAP.md` M4), returning the finished
- *   batch of page photos in capture order -- `null` (desktop's default) means this platform has no camera
- *   capture flow at all, in which case [LibraryScreen] simply doesn't offer it, rather than offering an
- *   action that would always fail or do nothing.
- * @param pedalMapping current pedal key bindings (`ROADMAP.md` M3); [onPedalMappingChange] persists a change
- *   the user makes in [PedalSettingsScreen] -- the platform entry point (`MainActivity`/`Main.kt`) owns
- *   actually saving it via `PedalSettingsStore`, the same division of responsibility `LibraryImporter`
- *   already uses for where the library itself lives.
- * @param onRawKeyHandlerChange the Android key-dispatch bridge both [ViewerScreen] and [PedalSettingsScreen]
- *   register into while they're the active screen -- see [ViewerScreen]'s own doc on this parameter for why
- *   it exists. Desktop's default no-op is correct: `Main.kt` never calls the registered handler, since
- *   desktop delivers key events to the focused composable directly.
- * @param syncSettingsDirectory where this device's sync identity/trust store lives (`ROADMAP.md` M4,
- *   `app.inkstave.shared.sync`) -- the platform entry point decides the actual path (`DesktopSettingsPaths`
- *   on desktop, `filesDir/sync` on Android), the same division of responsibility `pedalMapping`'s storage uses.
- * @param localIdentity this device's own persistent sync identity (`DeviceIdentityProvisioning`), provisioned
- *   once by the platform entry point on first run and passed down rather than re-derived here, so it stays
- *   stable across recompositions without this composable needing to know how provisioning works.
- * @param peerTrustStore the paired-device trust store [PairingScreen] reads/writes, and
- *   [LibraryScreen] reads to decide whether "send to desktop" is even offered for a finished
- *   capture session.
- * @param sendCaptureSession sends a finished capture session to a paired peer
- *   (`CaptureSessionSender`, `ROADMAP.md` M4) -- Android-only, like [captureImages]; `null`
- *   (desktop's default) means [LibraryScreen] never offers it, since desktop has no capture flow
- *   of its own to send a session *from* in the first place.
- * @param acquireMulticastLock held for as long as [PairingScreen] needs to *receive* mDNS
- *   multicast traffic -- Android's WiFi stack drops incoming multicast packets by default for
- *   battery reasons unless something holds a `WifiManager.MulticastLock`, a purely Android
- *   concept desktop has no equivalent of (`null`, desktop's default, means "nothing to hold").
- *   A real-device test is what caught this needing to exist at all: without it, discovery would
- *   plausibly advertise fine but silently never receive anything back.
+ * @param importer writes newly picked PDFs/images into the library as `.smpk` files.
+ * @param pickPdf opens the platform file picker for one PDF; `null` means the user cancelled.
+ * @param pickImages opens the platform file picker for one or more images, in import order.
+ * @param captureImages the in-app camera flow, returning page photos in capture order; `null` (desktop) means the
+ *   platform has no camera flow and [LibraryScreen] doesn't offer one.
+ * @param pedalMapping current pedal key bindings; [onPedalMappingChange] is called when the user edits them, and the
+ *   platform entry point persists the change.
+ * @param onRawKeyHandlerChange Android's key-dispatch bridge that [ViewerScreen] and [PedalSettingsScreen] register
+ *   into while active (see [ViewerScreen]). Desktop's no-op default is correct: it delivers keys to the focused
+ *   composable directly.
+ * @param syncSettingsDirectory where this device's sync identity and trust store live; chosen by the platform.
+ * @param localIdentity this device's persistent sync identity, provisioned once by the platform entry point.
+ * @param peerTrustStore paired devices; [PairingScreen] edits it and [LibraryScreen] uses it to decide whether
+ *   "send to desktop" is offered.
+ * @param sendCaptureSession sends a finished capture session to a paired peer; `null` (desktop) means it's never
+ *   offered, since desktop has no capture flow.
+ * @param acquireMulticastLock held while [PairingScreen] needs to receive mDNS traffic: Android drops incoming
+ *   multicast unless a `WifiManager.MulticastLock` is held. `null` (desktop) means there is nothing to hold.
  */
 @Composable
 fun App(

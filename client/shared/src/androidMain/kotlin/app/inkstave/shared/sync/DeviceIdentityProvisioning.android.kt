@@ -19,7 +19,7 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import javax.security.auth.x500.X500Principal
 
-/** [DeviceIdentity] as persisted on Android -- no keystore password here, see this file's doc. */
+/** [DeviceIdentity] as persisted on Android. No keystore password: AndroidKeyStore gates access itself. */
 @Serializable
 private data class AndroidIdentityMetadata(
     val deviceId: String,
@@ -45,14 +45,9 @@ private fun loadMetadata(settingsDirectory: File): AndroidIdentityMetadata? {
 private fun androidKeyStore(): KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
 /**
- * Generates a fresh identity using `AndroidKeyStore`'s own built-in self-signed-certificate
- * generation (`KeyGenParameterSpec.Builder.setCertificateSubject`, standard since API 23, well
- * below this app's `minSdk` 26) -- the Android-idiomatic mechanism for exactly this, hardware
- * -backed where the device supports it, and the reason this platform needs no `keytool`-equivalent
- * subprocess the way desktop does (see `DeviceIdentityProvisioning.desktop.kt`): generating a
- * keypair *in* `AndroidKeyStore` with a certificate subject configured produces the self-signed
- * certificate as a side effect of key generation itself, with the private key never leaving the
- * keystore (not even to this process' own memory) in the first place.
+ * Generates a fresh identity in `AndroidKeyStore`. Setting a certificate subject makes key generation
+ * produce the self-signed certificate too, and the private key never leaves the (hardware-backed where
+ * available) keystore.
  */
 private fun provisionNewIdentity(settingsDirectory: File): AndroidIdentityMetadata {
     settingsDirectory.mkdirs()
@@ -64,25 +59,10 @@ private fun provisionNewIdentity(settingsDirectory: File): AndroidIdentityMetada
     val spec =
         KeyGenParameterSpec
             .Builder(KEYSTORE_ALIAS, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
-            // EC (P-256/secp256r1), not RSA -- matching DeviceIdentityProvisioning.desktop.kt's
-            // own keytool invocation. This was RSA originally; a real cross-device pairing attempt
-            // on real hardware failed the TLS handshake with a BoringSSL "RSA routines ...
-            // internal error", consistent with this KeyGenParameterSpec never declaring
-            // .setSignaturePaddings(...) -- AndroidKeyStore cryptographically enforces that a key
-            // is only usable for the exact signature scheme(s) its spec authorized, and without
-            // one declared, whatever RSA padding TLS 1.3 actually negotiated for CertificateVerify
-            // (RSA-PSS by default) wasn't necessarily one this key was ever authorized to use.
-            // EC signing in TLS has no equivalent multi-padding-scheme ambiguity to get wrong.
-            //
-            // DIGEST_NONE is required alongside DIGEST_SHA256, also found on real hardware:
-            // Conscrypt/BoringSSL computes the TLS handshake transcript hash itself and asks
-            // AndroidKeyStore to perform a *raw* ECDSA sign over that already-computed digest --
-            // it never asks the key to hash-and-sign a message the way DIGEST_SHA256 alone
-            // authorizes. Without DIGEST_NONE, every handshake needing this key to sign (both as
-            // the connecting side's CertificateVerify and the accepting side's own) failed with
-            // `InvalidKeyException: ... KeyStoreException: Incompatible digest`, confirmed via a
-            // real phone-to-desktop pairing attempt's logcat stack trace through
-            // ConscryptEngineSocket$SSLInputStream -> PairingSession.
+            // EC P-256, matching desktop. Not RSA: AndroidKeyStore only allows the signature
+            // paddings a key was created for, and TLS 1.3's RSA-PSS wasn't one of them.
+            // DIGEST_NONE is required: Conscrypt hashes the handshake transcript itself and asks
+            // the keystore for a raw ECDSA signature ("Incompatible digest" otherwise).
             .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_NONE)
             .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setCertificateSubject(X500Principal("CN=$deviceId"))
@@ -101,12 +81,9 @@ private fun provisionNewIdentity(settingsDirectory: File): AndroidIdentityMetada
 }
 
 /**
- * Re-provisions even if [metadataFile] already exists, when the `AndroidKeyStore` entry it refers
- * to is missing -- a real, if rare, recoverable state (e.g. the keystore was reset by the OS, or
- * app data was restored from a backup that couldn't include hardware-backed key material) rather
- * than one worth crashing sync over. A regenerated identity means re-pairing with every peer,
- * the same user-visible, recoverable consequence `PeerTrustStore`'s own doc describes for a lost
- * trust store, just on the other side of the same relationship.
+ * Re-provisions when the `AndroidKeyStore` entry is missing even though [metadataFile] exists (keystore
+ * reset, or app data restored without hardware-backed keys). The new identity means re-pairing with
+ * every peer, which is recoverable, unlike crashing sync.
  */
 private fun metadataOrProvision(settingsDirectory: File): AndroidIdentityMetadata {
     val existing = loadMetadata(settingsDirectory)
@@ -126,9 +103,7 @@ actual fun deviceIdentitySslContext(
     metadataOrProvision(settingsDirectory)
     val keyManagerFactory =
         KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
-            // AndroidKeyStore entries aren't individually password-protected the way a PKCS12
-            // keystore's are -- the platform keystore itself gates access, so `null` here is
-            // correct, not a placeholder standing in for a password this code forgot to supply.
+            // No password: AndroidKeyStore entries are protected by the platform, not per entry.
             init(androidKeyStore(), null)
         }
     return SSLContext.getInstance("TLSv1.3").apply {

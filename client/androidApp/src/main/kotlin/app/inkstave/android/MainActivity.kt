@@ -30,38 +30,20 @@ import android.view.KeyEvent as NativeKeyEvent
 import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 
 /**
- * Android entry point. Wires up M1's real dependencies -- the local index
- * database (ADR-0005), the library's on-disk location, the importer, and
- * the SAF-backed file pickers ([DocumentPicker]) -- M3's pedal key mapping
- * (persisted at `filesDir/pedal-settings.json`), M4's in-app camera capture
- * ([CameraCapture]), and renders the shared [App] composable
- * (`docs/architecture.md`).
+ * Android entry point: wires the index database, library directory, importer, SAF pickers,
+ * camera capture, pedal settings and sync, then renders the shared [App].
  *
- * The library itself lives in app-specific internal storage
- * (`Context.filesDir`), not shared/public storage: it needs zero runtime
- * permissions and isn't meant to be browsed by other apps -- unlike
- * *importing*, which deliberately does read from shared storage, but only
- * via SAF's own per-file grant ([DocumentPicker]), never a broad storage
- * permission.
+ * The library lives in app-internal storage (`filesDir`), which needs no permissions; importing
+ * reads shared storage only through SAF's per-file grants ([DocumentPicker]).
  */
 class MainActivity : ComponentActivity() {
-    // A direct property initializer, not `by lazy` or anything constructed inside
-    // onCreate: registerForActivityResult (which DocumentPicker's constructor calls)
-    // must run unconditionally during activity initialization, before the activity
-    // reaches STARTED -- a class-body property initializer is the documented-safe
-    // place for that, same as registering an ActivityResultLauncher directly would be.
+    // Property initializers, not lazy: registerForActivityResult must run before the activity
+    // reaches STARTED.
     private val documentPicker = DocumentPicker(this)
 
-    // Same unconditional-during-init requirement as documentPicker above --
-    // CameraCapture's own registerForActivityResult call needs to run before
-    // this activity reaches STARTED.
     private val cameraCapture = CameraCapture(this)
 
-    // The Android half of the raw-key-dispatch bridge App's onRawKeyHandlerChange
-    // registers into (see ViewerScreen's doc on that parameter for the full
-    // reasoning: dispatchKeyEvent, below, runs before Compose's own focus-based key
-    // dispatch and doesn't depend on it). null whenever neither ViewerScreen nor
-    // PedalSettingsScreen is the currently-composed screen.
+    // Raw key handler registered by the viewer/pedal screens, or null when neither is shown.
     private var activeRawKeyHandler: ((Key) -> Boolean)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,20 +85,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The robust delivery path for pedal/hardware key events on Android -- see
-     * `ViewerScreen`'s `onRawKeyHandlerChange` doc for the full reasoning behind
-     * bypassing Compose's own focus-based key dispatch for this specifically.
-     * `dispatchKeyEvent` runs for every key event this Activity's window receives,
-     * before Compose focus even enters the picture, so it works regardless of
-     * whatever focus/touch-mode state the Compose tree happens to be in.
-     *
-     * Converts the native [NativeKeyEvent] to Compose's own [ComposeKeyEvent] via
-     * its public wrapping constructor -- deliberately *not* hand-rolled from
-     * `event.keyCode`, since [Key]'s internal representation packs the native
-     * keycode together with other bits ("Key ... androidx/compose/ui/input/key",
-     * Android reference docs) that this composable's own [Key.DirectionRight]-style
-     * comparisons rely on; going through Compose's own conversion guarantees the
-     * result compares equal the same way constants like [Key.DirectionRight] do.
+     * Delivers pedal and hardware keys before Compose's focus-based dispatch, so they work whatever
+     * the Compose focus state is. Converts via Compose's own [ComposeKeyEvent] constructor, because
+     * [Key] packs more than the native keycode and must compare equal to constants like
+     * [Key.DirectionRight].
      */
     override fun dispatchKeyEvent(event: NativeKeyEvent): Boolean {
         val composeEvent = ComposeKeyEvent(event)
@@ -129,15 +101,9 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Acquires an Android `WifiManager.MulticastLock` for as long as the returned [AutoCloseable]
- * is held open. Android's WiFi stack drops incoming multicast packets by default (a battery
- * -saving default that predates mDNS-based app features being common) unless something holds
- * this lock -- without it, [JmDnsSyncDiscovery] can advertise fine but never actually receive a
- * reply, a real bug only caught by testing discovery on real Android hardware (a plain JVM test
- * has no such restriction to hit in the first place). Reference-counted
- * ([WifiManager.MulticastLock.setReferenceCounted]) so [PairingScreen]'s standing lock and a
- * concurrent [sendCaptureSession] call's own short-lived one don't release each other's hold
- * early.
+ * Holds a WiFi multicast lock until the returned [AutoCloseable] is closed. Android drops
+ * incoming multicast without one, so mDNS discovery would never see replies. Reference-counted so
+ * the pairing screen's lock and a concurrent send's lock don't release each other.
  */
 private fun acquireMulticastLock(context: Context): AutoCloseable {
     val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -148,15 +114,8 @@ private fun acquireMulticastLock(context: Context): AutoCloseable {
 }
 
 /**
- * [App]'s `sendCaptureSession` bridge: a fresh, short-lived [JmDnsSyncDiscovery] scoped to this
- * one send (not the whole app's lifetime -- there's no standing UI screen here to keep a browse
- * live for, unlike [PairingScreen]), composed with [LanSyncTransport]/[CaptureSessionSender], the
- * exact same primitives the receiving desktop side ([Main.kt]'s `startSyncListener`) uses on its
- * end. A top-level function, not a method on [MainActivity], since it needs no `Activity` state of
- * its own -- everything it needs is passed in.
- *
- * Also holds [acquireMulticastLock] for this call's duration -- see that function's own doc for
- * why discovery needs it to receive anything at all on Android.
+ * Sends a capture session to [peer] using a discovery instance scoped to this one send, holding a
+ * multicast lock for its duration.
  */
 private suspend fun sendCaptureSession(
     context: Context,

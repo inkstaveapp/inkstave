@@ -8,43 +8,21 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The on-disk shape of a saved [PedalKeyMapping] -- deliberately not the
- * `.smpk` format's unknown-field-preserving pattern (`format.Manifest` and
- * friends): that pattern exists so a *portable, cross-device* file survives
- * being read by an older client. This is a local, single-device UI
- * preference with exactly one reader (this same app, this same version),
- * so a plain serializable DTO is the right amount of ceremony, not a
- * shortcut.
- *
- * [Key] itself isn't `@Serializable` (it's an external library type), so
- * this stores each bound key as its raw [Key.keyCode] and converts to/from
- * [PedalKeyMapping] at the boundary ([PedalSettingsStore.load]/[save])
- * rather than teaching [PedalKeyMapping] anything about serialization.
+ * On-disk shape of a saved [PedalKeyMapping]. A plain DTO: unlike `.smpk` files, this local setting
+ * needn't preserve unknown fields. Keys are stored as [Key.keyCode], since [Key] isn't serializable.
  */
 @Serializable
 private data class PedalSettingsDto(
     val bindings: Map<String, List<Long>>,
 )
 
-/**
- * Reads/writes a [PedalKeyMapping] at [file] -- the desktop and Android
- * entry points each pass a different, platform-appropriate [file] (see
- * `DesktopSettingsPaths` and `MainActivity`), mirroring how
- * `LibraryImporter`'s library directory is wired per-platform rather than
- * guessed at from inside shared code.
- */
+/** Reads and writes a [PedalKeyMapping] at [file]; each platform supplies its own settings location. */
 class PedalSettingsStore(
     private val file: File,
 ) {
     private val json = Json { prettyPrint = true }
 
-    /**
-     * The saved mapping, or [PedalKeyMapping.DEFAULT] if [file] doesn't exist yet
-     * (first run) or can't be parsed as valid settings. A corrupted or
-     * hand-edited-into-garbage settings file must never crash page turning --
-     * falling back to the default (which the user can re-customize) is always a
-     * safe, recoverable outcome, unlike propagating the error would be.
-     */
+    /** The saved mapping, or [PedalKeyMapping.DEFAULT] if there is none or it can't be read: a bad file must never break page turning. */
     fun load(): PedalKeyMapping {
         if (!file.exists()) return PedalKeyMapping.DEFAULT
         return try {
@@ -57,8 +35,7 @@ class PedalSettingsStore(
         } catch (e: SerializationException) {
             PedalKeyMapping.DEFAULT
         } catch (e: IllegalArgumentException) {
-            // PedalAction.valueOf on a name from a settings file written by a future/
-            // different app version with an action this version doesn't know about.
+            // An action name from another app version that this one doesn't know.
             PedalKeyMapping.DEFAULT
         } catch (e: IOException) {
             PedalKeyMapping.DEFAULT

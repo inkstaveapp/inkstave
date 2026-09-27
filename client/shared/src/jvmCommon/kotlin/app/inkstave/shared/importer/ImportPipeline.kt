@@ -18,25 +18,19 @@ data class ImportedScore(
 )
 
 /**
- * Turns a list of already-decoded/rendered [DecodedPage]s into the
- * [Manifest]/[Part]/[SmpkPage] triple a `.smpk` needs
- * (`docs/format-spec.md`). M1 always produces a single-part score named
- * "Full Score" -- there's no UI yet for naming parts or importing more than
- * one per score (that's M5, `ROADMAP.md`).
+ * Turns decoded pages into the [Manifest]/[Part]/[SmpkPage] triple a `.smpk` needs
+ * (`docs/format-spec.md`). Always produces a single part named "Full Score".
  *
- * Page ids are assigned `page-1`, `page-2`, ... in the order [decodedPages]
- * were provided, which callers must already have in the score's intended
- * reading order (page reordering isn't an M1 feature).
+ * Page ids are `page-1`, `page-2`, ... in the order given, so callers must pass pages in
+ * reading order.
  */
 object ImportPipeline {
     /**
-     * @param title the score's title, as the user typed it or as guessed from
-     * the imported file's name -- M1 has no OCR (that's M4), so this is
-     * never inferred from the page content itself.
+     * @param title the score's title, as typed by the user or guessed from the file name.
      * @param sourceType `"pdf-import"` or `"image-import"`, per
      * `docs/format-spec.md`'s `manifest.json.source.type`.
      * @param sourceDetails type-specific details for `manifest.json.source.details`
-     * (e.g. the original filename) -- deliberately untyped per the format spec.
+     * (e.g. the original filename); untyped per the format spec.
      */
     fun buildScore(
         title: String,
@@ -56,8 +50,7 @@ object ImportPipeline {
                             id = pageId,
                             width = decoded.width,
                             height = decoded.height,
-                            // "custom": M1 pages are the as-imported raster, unmodified by
-                            // any normalization pass -- that's M4's job (docs/image-pipeline.md).
+                            // "custom": imported pages keep their original raster, unnormalized.
                             aspectRatioClass = "custom",
                         ),
                 )
@@ -67,14 +60,9 @@ object ImportPipeline {
     }
 
     /**
-     * The M4 counterpart to [buildScore]: pages that have already been run through
-     * `processing-service`'s cleanup/OCR pipeline (`ProcessedPage`), rather than raw decoded ones
-     * -- each page's [PageMeta.processing]/[PageMeta.ocr] carry the pipeline's real data instead of
-     * `null`, and [PageMeta.aspectRatioClass] is whatever the pipeline actually normalized it to,
-     * not the hardcoded `"custom"` [buildScore] uses for as-imported pages. Source type is always
-     * `"camera-capture"` (`docs/format-spec.md`'s `manifest.json.source.type` enum) -- the only
-     * caller of this is a received capture session (`CaptureSessionReceiver`), never a PDF/image
-     * import, which is exactly what distinguishes this from [buildScore].
+     * Like [buildScore], for pages already run through `processing-service`: each page keeps the
+     * pipeline's [PageMeta.processing], [PageMeta.ocr] and aspect-ratio class. Used for received
+     * capture sessions, so the source type is always `"camera-capture"`.
      */
     fun buildProcessedScore(
         title: String,
@@ -103,9 +91,7 @@ object ImportPipeline {
         return ImportedScore(manifest, part, pages)
     }
 
-    /** The `Manifest`/`Part` construction [buildScore]/[buildProcessedScore] share -- everything
-     * except how each page's [PageMeta] itself gets built, which is the one real difference
-     * between "just imported" and "already processed" pages. */
+    /** Builds the [Manifest] and single [Part] shared by [buildScore] and [buildProcessedScore]. */
     private fun manifestAndPart(
         title: String,
         sourceType: String,

@@ -1,20 +1,10 @@
-"""Command-line entry point for the cross-language `.smpk` format round-trip
-check (`format/scripts/cross_lang_roundtrip.sh`).
+"""Python half of the cross-language `.smpk` round-trip check
+(`format/scripts/cross_lang_roundtrip.sh`); the Kotlin half is
+`CrossLangRoundtripCli.kt`. Not part of the public API.
 
-Not part of the public `inkstave_format` API surface `processing-service`
-imports -- exists purely as the Python half of a two-language integration
-test (`docs/testing-strategy.md`'s "cross-language format round-trip"
-requirement, previously an open gap noted in `ROADMAP.md`'s M0 section),
-mirroring the Kotlin CLI in
-`client/shared/src/jvmCommonTest/.../CrossLangRoundtripCli.kt`. Installed as
-the `inkstave-format-cross-lang-cli` console script (see `pyproject.toml`).
-
-Controlled by the same two environment variables as the Kotlin side:
-`CROSS_LANG_FIXTURE_PATH` (the canonical known-good manifest.json both
-languages treat as the single source of truth for "correct", rather than
-each hardcoding its own copy of the expected values) and
-`CROSS_LANG_TARGET_PATH` (the file this run writes to, in `write` mode, or
-reads from and compares against the fixture, in `read` mode).
+`CROSS_LANG_FIXTURE_PATH` is the known-good manifest both languages compare
+against; `CROSS_LANG_TARGET_PATH` is the file written (`write`) or checked
+(`read`).
 """
 
 from __future__ import annotations
@@ -37,14 +27,9 @@ def _require_env(name: str) -> str:
 
 
 def main() -> None:
-    """Runs the CLI. `write` re-encodes the fixture to the target path;
-    `read` decodes both the fixture and the target path with `Manifest` and
-    asserts they're equal -- Pydantic model equality, which includes extra
-    (unrecognised) fields since every `_InkstaveModel` sets
-    `extra="allow"` (see `models.py`), so a mismatch in the fixture's
-    deliberately-unrecognized `omrPreview` field fails this check too, not
-    just a mismatch in a known field. Exits non-zero on any mismatch or
-    usage error.
+    """`write` re-encodes the fixture to the target; `read` checks the target
+    equals the fixture, including unknown fields (models keep them), so a lost
+    `omrPreview` field fails too. Exits non-zero on mismatch or misuse.
     """
     mode = sys.argv[1] if len(sys.argv) > 1 else None
     fixture_path = Path(_require_env("CROSS_LANG_FIXTURE_PATH"))
